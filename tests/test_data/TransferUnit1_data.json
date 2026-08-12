@@ -1,0 +1,85 @@
+{
+    "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#TransferUnit1",
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt": [
+        {
+            "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#ConveyorBelt1_right",
+            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition": [
+                {
+                    "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue": [
+                        103.5
+                    ],
+                    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit": [
+                        "mm"
+                    ]
+                }
+            ],
+            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed": [
+                {
+                    "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue": [
+                        10.2
+                    ],
+                    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit": [
+                        "m/s"
+                    ]
+                }
+            ],
+            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking": [
+                true
+            ]
+        },
+        {
+            "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#ConveyorBelt1_left",
+            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition": [
+                {
+                    "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue": [
+                        -0.2
+                    ],
+                    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit": [
+                        "mm"
+                    ]
+                }
+            ],
+            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed": [
+                {
+                    "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue": [
+                        12.1
+                    ],
+                    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit": [
+                        "m/s"
+                    ]
+                }
+            ],
+            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking": [
+                true
+            ]
+        }
+    ],
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier": [
+        {
+            "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#LightBarrier1_front",
+            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied": [
+                {
+                    "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue": [
+                        true
+                    ]
+                }
+            ],
+            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking": [
+                false
+            ]
+        },
+        {
+            "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#LightBarrier1_back",
+            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied": [
+                {
+                    "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue": [
+                        false
+                    ]
+                }
+            ],
+            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking": [
+                true
+            ]
+        }
+    ]
+}

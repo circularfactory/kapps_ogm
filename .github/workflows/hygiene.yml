@@ -1,0 +1,32 @@
+# This workflow is the backstop for commits made directly in the public repo.
+# The pre-push gate in the dev checkout cannot see those commits, so the public
+# repo needs its own CI that runs the same hygiene checks.
+#
+# Checks 2-5. Only check 1 (remotes) is left out: a runner's remote is whatever
+# actions/checkout configured and says nothing about the release. Check 2 is the
+# reason this file exists, and fetch-depth: 0 below is what lets it read the
+# whole history rather than the one commit a shallow checkout would give it.
+#
+# Pinned to Python 3.12: release_checks.py uses pathlib.Path.walk, which is 3.12+.
+# The package's own floor is 3.12 as well, so the two happen to agree here -- but
+# the pin belongs to the check and must not drift down with the package if that
+# floor is ever lowered.
+
+name: hygiene
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run the release hygiene checks
+        run: python scripts/release_checks.py .

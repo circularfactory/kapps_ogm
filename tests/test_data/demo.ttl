@@ -1,0 +1,123 @@
+@prefix ds: <https://www.sfb1574.kit.edu/ontologies/DemoStructure#> .
+@prefix dsi: <https://www.sfb1574.kit.edu/ontologies/DemoStructureInstance#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+ds: a owl:Ontology .
+
+dsi: a owl:Ontology ;
+	owl:imports ds: .
+
+# Classes
+ds:NodeA a owl:Class ;
+    rdfs:label "Node A" ;
+    rdfs:comment "This is Node A" .
+
+ds:NodeB a owl:Class ;
+    rdfs:label "Node B" ;
+    rdfs:comment "This is Node B" .
+
+ds:NodeC a owl:Class ;
+    rdfs:label "Node C" ;
+    rdfs:comment "This is Node C" .
+
+_:ComplexAttribute a owl:Class ;
+    rdfs:label "Complex Attribute" ;
+    rdfs:comment "This is a complex attribute class" ;
+    owl:intersectionOf (
+        [
+            a owl:Restriction ;
+            owl:onProperty ds:hasValue ;
+            owl:someValuesFrom xsd:string
+        ]
+        [
+            a owl:Restriction ;
+            owl:onProperty ds:hasNumber ;
+            owl:someValuesFrom xsd:integer
+        ]
+    ) .
+
+# Object Properties
+ds:hasNodeB a owl:ObjectProperty ;
+    rdfs:domain ds:NodeA ;
+    rdfs:range ds:NodeB .
+
+ds:hasNodeC a owl:ObjectProperty ;
+    rdfs:domain ds:NodeB ;
+    rdfs:range ds:NodeC .
+
+ds:hasNodeA a owl:ObjectProperty ;
+    rdfs:domain ds:NodeC ;
+    rdfs:range ds:NodeA .
+
+ds:hasComplexAttribute a owl:ObjectProperty ;
+    rdfs:domain ds:NodeB ;
+    rdfs:range _:ComplexAttribute .
+
+# Data Properties
+ds:hasAttributeA a owl:DatatypeProperty ;
+    rdfs:domain ds:NodeA ;
+    rdfs:range xsd:string .
+ds:hasAttributeAB a owl:DatatypeProperty ;
+    rdfs:domain [
+        a owl:Class ;
+        owl:unionOf (ds:NodeA ds:NodeB)
+    ] ;
+    rdfs:range xsd:double . 
+ds:hasAttributeB a owl:DatatypeProperty ;
+    rdfs:domain ds:NodeB ;
+    rdfs:range xsd:string .
+ds:hasAttributeC a owl:DatatypeProperty ;
+    rdfs:domain ds:NodeC ;
+    rdfs:range xsd:string .
+ds:hasValue a owl:DatatypeProperty ;
+    rdfs:domain _:ComplexAttribute ;
+    rdfs:range xsd:string .
+ds:hasNumber a owl:DatatypeProperty ;
+    rdfs:domain _:ComplexAttribute ;
+    rdfs:range xsd:integer .
+
+# Instances
+dsi:NodeAInstance1 a owl:NamedIndividual , ds:NodeA ;
+    ds:hasNodeB dsi:NodeBInstance1 ,
+        dsi:NodeBInstance2 ;
+    ds:hasAttributeA "Attribute A1.1 Content" ,
+        "Attribute A1.2 Content" ;
+    ds:hasAttributeAB 3.14 .
+
+dsi:NodeAInstance2 a owl:NamedIndividual , ds:NodeA ;
+    ds:hasNodeB dsi:NodeBInstance2 ;
+    ds:hasAttributeA "Attribute A2 Content" ;
+    ds:hasAttributeAB -9.99 .
+
+dsi:NodeBInstance1 a owl:NamedIndividual , ds:NodeB ;
+	ds:hasNodeC dsi:NodeCInstance1 ;
+	ds:hasComplexAttribute
+        [
+            ds:hasValue "Complex Attribute 1.1 Value" ;
+            ds:hasNumber 123
+        ] ,
+        [
+            ds:hasValue "Complex Attribute 1.2 Value" ;
+            ds:hasNumber -123
+        ] ;
+	ds:hasAttributeB "Attribute B1 Content" ;
+    ds:hasAttributeAB 2.19 .
+
+dsi:NodeBInstance2 a owl:NamedIndividual , ds:NodeB ;
+	ds:hasNodeC dsi:NodeCInstance2 ;
+	ds:hasComplexAttribute [
+		ds:hasValue "Complex Attribute 2 Value" ;
+		ds:hasNumber 12345
+	] ;
+	ds:hasAttributeB "Attribute B2 Content" ;
+    ds:hasAttributeAB -0.01 .
+
+dsi:NodeCInstance1 a owl:NamedIndividual , ds:NodeC ;
+    ds:hasNodeA dsi:NodeAInstance1 ;
+	ds:hasAttributeC "Attribute C Content" .
+
+dsi:NodeCInstance2 a owl:NamedIndividual , ds:NodeC ;
+    ds:hasNodeA dsi:NodeAInstance2 ;
+	ds:hasAttributeC "Attribute C2 Content" .

@@ -1,0 +1,43 @@
+{
+  "id": "https://example.org/instances/transferUnit_1",
+
+  "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorBelt": [
+    {
+      "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorPosition": [
+        {
+          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue": [
+            1.25
+          ],
+          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasUnit": [
+            "https://example.org/units/meter"
+          ]
+        }
+      ],
+      "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorSpeed": [
+        {
+          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue": [
+            0.75
+          ],
+          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasUnit": [
+            "https://example.org/units/meter_per_second"
+          ]
+        }
+      ]
+    }
+  ],
+
+  "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasLightBarrier": [
+    {
+      "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isOccupied": [
+        {
+          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue": [
+            false
+          ],
+          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasUnit": [
+            "https://example.org/units/boolean"
+          ]
+        }
+      ]
+    }
+  ]
+}

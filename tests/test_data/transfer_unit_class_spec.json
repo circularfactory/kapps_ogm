@@ -1,0 +1,149 @@
+{
+  "iri": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit",
+  "label": "Transfer Unit",
+  "types": [
+    "http://www.w3.org/2000/01/rdf-schema#Class",
+    "http://www.w3.org/2002/07/owl#Class"
+  ],
+  "properties": {
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt": {
+      "iri": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt",
+      "value_kind": "object",
+      "python_range_type": null,
+      "required": false,
+      "min_count": null,
+      "max_count": null,
+      "nested": {
+        "iri": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#ConveyorBelt",
+        "label": "Conveyor Belt",
+        "properties": {
+          "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition": {
+            "iri": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition",
+            "value_kind": "complex",
+            "python_range_type": null,
+            "required": false,
+            "min_count": null,
+            "max_count": null,
+            "nested": {
+              "iri": null,
+              "properties": {
+                "https://www.sfb1574.kit.edu/ontologies/inf#hasValue": {
+                  "iri": "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+                  "value_kind": "literal",
+                  "python_range_type": "float",
+                  "required": true,
+                  "min_count": null,
+                  "max_count": null,
+                  "nested": null
+                },
+                "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit": {
+                  "iri": "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+                  "value_kind": "literal",
+                  "python_range_type": "string",
+                  "required": true,
+                  "min_count": null,
+                  "max_count": null,
+                  "nested": null
+                }
+              },
+              "metadata": {
+                "intersectionOf": [
+                  "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+                  "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit"
+                ]
+              }
+            }
+          },
+          "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed": {
+            "iri": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed",
+            "value_kind": "complex",
+            "python_range_type": null,
+            "required": false,
+            "min_count": null,
+            "max_count": null,
+            "nested": {
+              "iri": null,
+              "properties": {
+                "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit": {
+                  "iri": "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+                  "value_kind": "literal",
+                  "python_range_type": "string",
+                  "required": true,
+                  "min_count": null,
+                  "max_count": null,
+                  "nested": null
+                },
+                "https://www.sfb1574.kit.edu/ontologies/inf#hasValue": {
+                  "iri": "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+                  "value_kind": "literal",
+                  "python_range_type": "float",
+                  "required": true,
+                  "min_count": null,
+                  "max_count": null,
+                  "nested": null
+                }
+              },
+              "metadata": {
+                "intersectionOf": [
+                  "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+                  "https://www.sfb1574.kit.edu/ontologies/inf#hasValue"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier": {
+      "iri": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier",
+      "value_kind": "object",
+      "python_range_type": null,
+      "required": false,
+      "min_count": null,
+      "max_count": null,
+      "nested": {
+        "iri": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#LightBarrier",
+        "label": "Light Barrier",
+        "properties": {
+          "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied": {
+            "iri": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied",
+            "value_kind": "complex",
+            "python_range_type": null,
+            "required": false,
+            "min_count": null,
+            "max_count": null,
+            "nested": {
+              "iri": null,
+              "properties": {
+                "https://www.sfb1574.kit.edu/ontologies/inf#hasValue": {
+                  "iri": "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+                  "value_kind": "literal",
+                  "python_range_type": "boolean",
+                  "required": true,
+                  "min_count": null,
+                  "max_count": null,
+                  "nested": null
+                },
+                "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit": {
+                  "iri": "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+                  "value_kind": "literal",
+                  "python_range_type": "string",
+                  "required": true,
+                  "min_count": null,
+                  "max_count": null,
+                  "nested": null
+                }
+              },
+              "metadata": {
+                "intersectionOf": [
+                  "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+                  "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

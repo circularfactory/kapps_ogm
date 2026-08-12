@@ -1,0 +1,65 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix inf: <https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#> .
+@prefix tu: <https://www.sfb1574.kit.edu/ontologies/TransferUnit#> .
+@prefix tui: <https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#> .
+
+tui: rdf:type owl:Ontology ;
+	owl:imports inf: ;
+	owl:imports tu: .
+
+tui:TransferUnit1 rdf:type owl:NamedIndividual ,
+		tu:TransferUnit ;
+	tu:hasConveyorBelt tui:ConveyorBelt1_right ,
+		tui:ConveyorBelt1_left ;
+	tu:hasLightBarrier tui:LightBarrier1_front ,
+		tui:LightBarrier1_back ;
+	rdfs:comment "Example transfer unit with two conveyor belts and two light barriers." .
+
+tui:ConveyorBelt1_right rdf:type owl:NamedIndividual ,
+		tu:ConveyorBelt ;
+	tu:hasConveyorSpeed _:ConveyorBelt1_right_hasConveyorSpeed1 ;
+	tu:hasConveyorPosition _:ConveyorBelt1_right_hasConveyorPosition1 ;
+	rdfs:comment "Right conveyor belt of TransferUnit1." .
+
+tui:ConveyorBelt1_left rdf:type owl:NamedIndividual ,
+		tu:ConveyorBelt ;
+	tu:hasConveyorSpeed _:ConveyorBelt1_left_hasConveyorSpeed1 ;
+	tu:hasConveyorPosition _:ConveyorBelt1_left_hasConveyorPosition1 .
+
+tui:LightBarrier1_front rdf:type owl:NamedIndividual ,
+		tu:LightBarrier ;
+	tu:isOccupied _:LightBarrier1_front_isOccupied1 ;
+	rdfs:comment "Front light barrier sensor of TransferUnit1." .
+
+tui:LightBarrier1_back rdf:type owl:NamedIndividual ,
+		tu:LightBarrier ;
+	tu:isOccupied _:LightBarrier1_back_isOccupied1 .
+
+_:ConveyorBelt1_right_hasConveyorSpeed1
+	inf:hasValue 10.2 ;
+	tu:hasUnit "m/s" ;
+	rdfs:comment "Conveyor speed parameter for ConveyorBelt1_right" .
+
+_:ConveyorBelt1_right_hasConveyorPosition1
+	inf:hasValue 103.5 ;
+	tu:hasUnit "mm" ;
+	rdfs:comment "Conveyor position parameter for ConveyorBelt1_right" .
+
+_:ConveyorBelt1_left_hasConveyorSpeed1
+	inf:hasValue 12.1 ;
+	tu:hasUnit "m/s" .
+
+_:ConveyorBelt1_left_hasConveyorPosition1
+	inf:hasValue -0.2 ;
+	tu:hasUnit "mm" .
+
+_:LightBarrier1_front_isOccupied1
+	inf:hasValue true ;
+	rdfs:comment "Occupied status parameter for LightBarrier1_front" .
+
+_:LightBarrier1_back_isOccupied1
+
+	inf:hasValue false ;
+	rdfs:comment "Occupied status parameter for LightBarrier1_back" .

@@ -1,0 +1,172 @@
+{
+  "$defs": {
+    "kapps_ogm__builders__mapping__class_spec__AnonymousClass__1": {
+      "properties": {
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue": {
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "items": {},
+          "minItems": 1,
+          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "type": "array"
+        },
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasUnit": {
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "items": {},
+          "minItems": 1,
+          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "type": "array"
+        }
+      },
+      "required": [
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue",
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasUnit"
+      ],
+      "title": "AnonymousClass",
+      "type": "object"
+    },
+    "kapps_ogm__builders__mapping__class_spec__AnonymousClass__2": {
+      "properties": {
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasUnit": {
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "items": {},
+          "minItems": 1,
+          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "type": "array"
+        },
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue": {
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "items": {},
+          "minItems": 1,
+          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "type": "array"
+        }
+      },
+      "required": [
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasUnit",
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue"
+      ],
+      "title": "AnonymousClass",
+      "type": "object"
+    },
+    "kapps_ogm__builders__mapping__class_spec__AnonymousClass__3": {
+      "properties": {
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue": {
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "items": {},
+          "minItems": 1,
+          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "type": "array"
+        },
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasUnit": {
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "items": {},
+          "minItems": 1,
+          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "type": "array"
+        }
+      },
+      "required": [
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue",
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasUnit"
+      ],
+      "title": "AnonymousClass",
+      "type": "object"
+    },
+    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_ConveyorBelt": {
+      "properties": {
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorPosition": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/kapps_ogm__builders__mapping__class_spec__AnonymousClass__1"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition",
+          "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"
+        },
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorSpeed": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/kapps_ogm__builders__mapping__class_spec__AnonymousClass__2"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed",
+          "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"
+        }
+      },
+      "title": "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_ConveyorBelt",
+      "type": "object"
+    },
+    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_LightBarrier": {
+      "properties": {
+        "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isOccupied": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/kapps_ogm__builders__mapping__class_spec__AnonymousClass__3"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied",
+          "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied"
+        }
+      },
+      "title": "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_LightBarrier",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorBelt": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_ConveyorBelt"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt",
+      "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"
+    },
+    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasLightBarrier": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_LightBarrier"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier",
+      "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"
+    }
+  },
+  "title": "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_TransferUnit",
+  "type": "object"
+}
