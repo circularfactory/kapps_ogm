@@ -1,7 +1,9 @@
 """
 Unit tests for merging anonymous rdfs:range restrictions across rdfs:subPropertyOf chains.
 
-Tests for SAWeindel/kapps_ogm#7: merge anonymous rdfs:range restrictions across rdfs:subPropertyOf*
+Anonymous rdfs:range restrictions are merged across rdfs:subPropertyOf*, the conjunctive
+reading RDFS entails: a range asserted on an interface superproperty reaches the value node,
+and several ranges on one property are intersected rather than refused.
 """
 
 import pytest
@@ -1005,7 +1007,9 @@ class TestRestrictionTargetDecidesValueKind:
 
     def test_class_valued_some_values_from_becomes_an_object_constraint(self, ogm: OGM):
         """An intersection range whose restriction has owl:someValuesFrom pointing at a class IRI
-        yields value_kind OBJECT, some_from set to the class IRI, and min_count 1 (ticket #11).
+        yields value_kind OBJECT, some_from set to the class IRI, and min_count 1. The min_count
+        is what the code does today; that it should not, under the Open World Assumption, is
+        open work.
         """
         NS_test = NS + "classSome_"
         prop_iri = IRI(NS_test + "hasClassSomeTarget")

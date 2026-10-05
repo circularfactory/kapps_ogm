@@ -24,9 +24,11 @@ def sanitize_data(
     Recursively converts provided data dict into a unified format.
 
     The output is a dict with items in any of the forms:
-        - IRI: List[Any] # literal property -> list of literal values
-        - IRI: List[Node] # class property -> list of Node instances with IRI ids
-        - IRI: List[Node] # complex property -> list of Node instances with blank ids
+
+    - IRI: List[Any] # literal property -> list of literal values
+    - IRI: List[Node] # class property -> list of Node instances with IRI ids
+    - IRI: List[Node] # complex property -> list of Node instances with blank ids
+
     In the input, property keys can be either str or IRI. Class and complex property
     values may be represented as dicts.
 

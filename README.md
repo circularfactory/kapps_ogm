@@ -94,6 +94,92 @@ model = fetched.materialize()   # a pydantic BaseModel, validated against the de
 print(model.model_dump())
 ```
 
+## Changing several instances in one write
+
+`commit` updates one instance. To change several instances together, give it `changes`: a list of
+`Create` and `Update` entries, each for a different instance. They are written as one
+`DELETE/INSERT`, so the store admits all of them or none of them. If the store refuses one
+change, for example on a SHACL shape, the call raises the store's error and writes nothing.
+
+Here a new inspection record is created, and an existing workpiece points at it, in one write:
+
+```python
+from kapps_ogm import Create, Update
+
+inspection = IRI(f"{ONTOLOGY}inspection_7")
+
+ogm.commit(
+    changes=[
+        Create(class_iri=IRI(f"{ONTOLOGY}Inspection"), instance_iri=inspection, data={}),
+        Update(
+            instance_iri=IRI(f"{ONTOLOGY}workpiece_1"),
+            data={f"{ONTOLOGY}hasLastInspection": [{"id": str(inspection)}]},
+        ),
+    ]
+)
+```
+
+An `Update` means what a commit of one instance means: each property in `data` replaces the stored
+values of that property, and the other properties keep theirs. So an `Update` lists every value
+that a property keeps, and a value it does not list is removed. To add a value to a property that
+already has values, read the stored values and list them too. A value that another writer adds
+between that read and the commit is then removed, and nothing reports it.
+
+Each instance gets at most one change in a call. This includes a named instance that a change
+nests with properties in its data, because the change writes about it too. Two changes that write
+one instance would each apply their own diff to it, so the call raises `ValueError` before it
+writes. Types do not count, so a `Create` can link another new instance of the same call.
+
+A `Create` refers to a new instance only, as `create` does: see below. Give a `Create` its
+`instance_iri` when another change refers to it.
+
+## What create and commit promise
+
+A normal return of `create` or `commit` means that the store admitted the write: it found the
+precondition of the write true, and it committed the change. If the precondition is false, the call
+raises `PreconditionFailedError` from `kapps_triplestore_interface.exceptions`, and nothing of the
+call is written. The error comes unchanged from the triple store interface. The store checks the
+precondition in the same update request that makes the write.
+
+**A new instance only.** `create`, and a `Create` in `commit`, write only new instances. The store
+refuses the write if the target graph holds an explicit triple whose subject is an instance that the
+call creates. The target graph is `named_graph` if you give one. An IRI whose triples are only in
+another graph counts as new there.
+
+**Links.** The data decides what a call creates. A nested value with properties is an instance of
+its own, and the call creates it with its parent. A nested value given by its IRI alone, as
+`{"id": iri}` with no other key or as an `IRI`, is a link. The call writes only the triple that
+points at it, and nothing about the linked instance, even when the class scope hydrates its class.
+So a link can point at an instance that exists. A SHACL shape decides whether the store admits it.
+
+```python
+# m2 is new. obj2 exists, and the call writes nothing about it.
+ogm.create(
+    class_iri=IRI(f"{ONTOLOGY}Measurement"),
+    instance_iri=IRI(f"{ONTOLOGY}m2"),
+    data={
+        f"{ONTOLOGY}value": [1.5],
+        f"{ONTOLOGY}measuredOn": [{"id": f"{ONTOLOGY}obj2"}],
+    },
+)
+```
+
+**What `commit` removes.** `commit` reads the stored instance first, inferred triples included.
+The triples that the new data no longer holds are the triples to remove. A delete removes only
+explicit triples, so the store checks each triple to remove against the explicit triples of the
+target graph. The call raises if one is not there. Examples are a value that the store only
+infers, a value that another writer changed after the call read it, and a `named_graph` that does
+not hold the instance. If the data changes nothing, the call sends nothing, because there is
+nothing to admit.
+
+**Concurrent writers.** The store isolates commits at the level "read committed". Another write
+can commit between the check of a write and its own commit. If an invariant must hold while
+several writers change the store, state it as a SHACL shape. The store checks the shapes when it
+commits each write.
+
+**Known limit.** A triple that is both explicit and inferred passes the check. After the commit it
+is still visible, because a delete clears only the explicit triple, and the inferred one stays.
+
 ## What the ontology has to declare
 
 The mapper reads shapes out of the store, so a class whose properties are undeclared maps to an

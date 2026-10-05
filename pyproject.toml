@@ -3,15 +3,15 @@
 #
 # poetry-core writes only the **first** entry of `authors` and of `maintainers` into a wheel's
 # METADATA, as the singular pre-PEP-621 `Author:` and `Maintainer:` fields. The sibling fork
-# measured that during kapps_semantic_middleware#133 and shipped a wheel crediting one of its
-# four authors; moving to the PEP 621 `[project]` table did not fix it, because poetry-core
+# measured that when it was first published and shipped a wheel crediting one of its four
+# authors; moving to the PEP 621 `[project]` table did not fix it, because poetry-core
 # collapses the list either way.
 #
 # That matters more here than it would in a normal project. The publish repository takes **one
-# commit per release and carries no ancestry** (kapps_semantic_middleware#110), so this
-# metadata, `LICENSE`, `README.md` and `CHANGELOG.md` are the entire credit channel. This is
-# the half a machine reads, and `prepare_release.py` asserts both names against the built wheel
-# before a release goes out.
+# commit per release and carries no ancestry**, so this metadata, `LICENSE`, `README.md` and
+# `CHANGELOG.md` are the entire credit channel. This is
+# the half a machine reads, and `credited` in `release/config.toml` asserts both names against
+# the built wheel before a release goes out.
 #
 # hatchling is also what the two sibling projects already build with, and unlike the poetry
 # manifest this replaces it is readable by uv -- under poetry-core, `uv run pytest` in this
@@ -21,7 +21,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kapps-ogm"
-version = "0.2.0"
+version = "0.3.0"
 description = "Read and write RDF instance data as pydantic models, with the shape derived from the ontology's own OWL restrictions."
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
@@ -40,9 +40,9 @@ maintainers = [
 license = "MIT"
 license-files = ["LICENSE"]
 classifiers = [
-    # 4, not 5: kapps_ogm#23 (scoped hydration below a COMPLEX property) and #11 (requiredness
-    # under the Open World Assumption) are both open and both touch the public surface. The 0.x
-    # version number says the same thing, and the two must not disagree.
+    # 4, not 5: scoped hydration below a COMPLEX property and requiredness from SHACL shapes are
+    # both open work, and both touch the public surface. The 0.x version number
+    # says the same thing, and the two must not disagree.
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
@@ -58,12 +58,17 @@ classifiers = [
 #
 # The triplestore interface line is the one this release exists for. It was a git URL naming a
 # branch, and PyPI rejects any distribution whose metadata carries a direct URL, so `kapps-ogm`
-# could not be uploaded at all while it stood (kapps_semantic_middleware#119). #133 published
-# the library it pointed at under a new name, which is what turned it back into a version pin.
+# could not be uploaded at all while it stood. Publishing the library it pointed at under a new
+# name is what turned it back into a version pin.
+#
+# That pin is a `~=X.Y.Z` compatible-release range, which admits `>=X.Y.Z, ==X.Y.*`: a patch
+# release of the triplestore interface reaches this project on the next resolve with no human in
+# the loop, while a minor release needs a deliberate bump of this pin, proven by this project's
+# own test suite before it lands.
 dependencies = [
     "rdflib>=7.1.3,<8.0.0",
     "pydantic>=2.12.4,<3.0.0",
-    "kapps-triplestore-interface>=2.1.0",
+    "kapps-triplestore-interface~=2.2.0",
 ]
 
 [project.urls]
@@ -74,8 +79,11 @@ Changelog = "https://github.com/circularfactory/kapps_ogm/blob/main/CHANGELOG.md
 
 [tool.hatch.build.targets.wheel]
 # PEP 621 has no way to say which directory is the package, and the directory name differs from
-# the distribution name by an underscore.
-packages = ["kapps_ogm"]
+# the distribution name by an underscore. `src/` layout as in the two sibling projects:
+# hatchling collapses the path to its last component, so the wheel still carries `kapps_ogm/`
+# at the top -- and the checkout on `sys.path` can no longer shadow the installed wheel, which
+# is what the release cross-check probes.
+packages = ["src/kapps_ogm"]
 
 [dependency-groups]
 dev = [
@@ -117,5 +125,11 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --strict-markers"
+markers = [
+    "live: needs a reachable GraphDB (the GRAPHDB_* environment variables). Applied automatically to every test that requests the `db` fixture, directly or through another fixture such as `ogm`, so it cannot drift out of step with what a test needs. `-m 'not live'` selects the tier that runs without a triple store: 253 of 330 tests. The 77 it drops are all under `tests/unit/`, which is not the mock-only directory its name suggests. That tier is for a laptop, not for CI -- CI provisions a disposable GraphDB, with SHACL validation on, and runs all 330.",
+]
 log_cli = "true"
 log_cli_level = "info"
+# rdflib's SPARQL parser calls pyparsing names that pyparsing 3.3 deprecates, once per parse. The
+# warning is about rdflib's code, not this project's, and it buried every other warning.
+filterwarnings = ["ignore::pyparsing.warnings.PyparsingDeprecationWarning"]

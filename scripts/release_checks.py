@@ -1,23 +1,6 @@
 #!/usr/bin/env python3
 """Five hygiene checks that gate a public open-source release.
 
-Vendored from `kapps_semantic_middleware` (its #110 chose vendoring over sharing: the repos
-release on their own schedules), by way of the `kapps_triplestore_interface` copy, which is
-where the two-host `PRIVATE_HOSTS` and the `.git`-pruning walk below were written.
-
-**There are five checks here and six there, and the missing one is the rename.** That check
-belongs to a repository whose import package changes on the way out. This one's does not:
-`kapps_ogm` has been the import package since the beginning and `kapps-ogm` has been the
-distribution since 0.1.1, so a rename check would have nothing to prove and would be a gate
-that can only ever pass -- which is worse than no gate, because it reads as one.
-
-The old *dependency* name is a fair question and the answer is the same. `graph_db_interface`
-was swept out of this tree by kapps_semantic_middleware#133 and appears in **no code** here --
-this sentence and the CHANGELOG's account of the sweep are prose about it, which is why the
-claim is worth stating carefully rather than as "no file". A stale import of it would fail at
-import time, and `prepare_release.py`'s probe already walks every module of the built wheel to
-catch exactly that, against the artifact rather than against the tree.
-
 Run from the repo root:
 
     python scripts/release_checks.py [TREE]                 # checks 2-5 over TREE (default ".")
@@ -49,8 +32,9 @@ from typing import NamedTuple
 #
 # DO NOT join these concatenations back into single strings, and do not quote the
 # assembled values anywhere in this file -- comments and docstrings are scanned too.
-# test_release_checks.py reads this file's own source and asserts neither value
-# appears in it, so a tidy-up fails there rather than silently at release time.
+# test_release_checks.py reads this file's own source and asserts that no entry of
+# either tuple appears in it -- every entry, not just the first -- so a tidy-up fails
+# there rather than silently at release time.
 # -----------------------------------------------------------------------------
 
 PRIVATE_HOSTS: tuple[str, ...] = (
@@ -59,7 +43,7 @@ PRIVATE_HOSTS: tuple[str, ...] = (
 )
 """The private hosts that must appear nowhere in a public tree.
 
-Index 0 is the private Git host -- where this library is developed from #119 onward, and the
+Index 0 is the private Git host -- where this library is developed, and the
 one the sibling repos already ban. Index 1 is the institute's GraphDB, and **it is the one that
 has actually fired here**: the conjunctive-range entry in `CHANGELOG.md` quoted the endpoint it
 was measured against, and all seven `scripts/demo_*.py` hardcode it as their `base_url`. That
@@ -299,9 +283,9 @@ def _read_text_safe(path: Path) -> str | None:
 def check_secrets(tree: Path) -> list[Violation]:
     """Check 4 — secrets. No private host may appear anywhere.
 
-    Walks ``tree``, skipping ``.git/`` and binary files. A file violates once per entry of
-    ``PRIVATE_HOSTS`` it contains, so a file naming both is reported for both rather than
-    fixed, re-run and reported again.
+    Walks ``tree``, skipping ``.git/`` and binary files. A file violates **once per entry of
+    ``PRIVATE_HOSTS`` it contains**, so a file naming both is reported for both rather than
+    fixed, re-run, and reported again.
     """
     violations: list[Violation] = []
 
@@ -320,12 +304,11 @@ def check_secrets(tree: Path) -> list[Violation]:
 
 
 def check_references(tree: Path) -> list[Violation]:
-    """Check 5 — references. No shipped file points at a decision-record directory.
+    """Check 5 — references. No shipped file points at anything the allowlist left behind.
 
-    Walks ``tree``, skipping ``.git/`` and binary files. A file violates when its
-    text contains either entry of ``DEAD_REFERENCE_DIRS``. Both shapes fail: a full
-    path with a filename, and a bare directory named in prose. A bare citation like
-    ``ADR 0012`` does NOT fire — it names no directory.
+    Walks ``tree``, skipping ``.git/`` and binary files. A file violates when its text contains
+    any entry of ``DEAD_REFERENCE_DIRS`` — a full path with a filename, or a bare directory
+    named in prose. A file is reported once, for the first dead directory it names.
     """
     violations: list[Violation] = []
 
@@ -340,6 +323,7 @@ def check_references(tree: Path) -> list[Violation]:
                     Violation("references", rel_str, f"references dead directory '{dead_dir}'")
                 )
                 break
+
 
     return violations
 
@@ -396,9 +380,8 @@ def main(argv: list[str] | None = None) -> int:
         python scripts/release_checks.py [TREE]                    # checks 2-5
         python scripts/release_checks.py [TREE] --origin URL       # checks 1-5
 
-    Without ``--origin`` this is the release repo's CI backstop, which
-    kapps_semantic_middleware#110 specifies as checks 2-5. Only check 1 needs the expected
-    origin, so only check 1 waits for it.
+    Without ``--origin`` this is the release repo's CI backstop, which is specified as
+    checks 2-5. Only check 1 needs the expected origin, so only check 1 waits for it.
     """
     parser = argparse.ArgumentParser(
         description="Hygiene checks for a public release tree.",

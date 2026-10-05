@@ -1,5 +1,86 @@
 # Changelog
 
+## 0.3.0 — 2026-10-05
+
+### Added
+
+- **`OGM.commit` writes changes to several instances in one update request.** Give `changes`, a list
+  of `Create` and `Update` entries, instead of `instance_iri` and `data`. The OGM validates and
+  reads every change first. Then it sends all of them as one `DELETE/INSERT`, so the store admits
+  all of them or none of them. A refusal of one change raises the store's error, and no change is
+  written. A change can refer to an instance that a `Create` in the same call makes. The call
+  returns one `Node` for each change, in the same order. A commit of one instance does not change.
+- The call raises `ValueError` and writes nothing when two changes write the same instance. That is
+  the instance a change names, or a named instance that its data nests with properties. Types do
+  not count.
+- `kapps_ogm` exports `Create` and `Update`.
+- **The data decides whether a nested value is a link.** A nested value given by its IRI alone, as
+  `{"id": iri}` with no other key or as an `IRI`, is a link. `OGM.create` and a `Create` in
+  `OGM.commit` write only the triple that points at it, and nothing about the linked instance, even
+  when the class scope hydrates its class. A nested value with properties is created with its
+  parent. Before, a hydrated class decided: a link wrote the linked instance's types, and so the
+  first measurement on an existing object was not written. An `IRI` as the value of an object
+  property now means the same as `{"id": iri}`. Before, it raised `ValueError`.
+- README section "What create and commit promise".
+
+### Changed
+
+- **`OGM.create` and `OGM.commit` return only for a write that the store made.** If the store finds
+  the precondition of the write false, the call raises `PreconditionFailedError` from
+  `kapps_triplestore_interface.exceptions`, unchanged, and nothing of the call is written. Before,
+  the call returned, and its `Node` described a write that did not happen. The precondition is
+  checked inside the write:
+  - `create`, and a `Create` in `commit`, raise if the target graph holds an explicit triple whose
+    subject is an instance that the call creates: the new instance, or a nested instance that the
+    data gives with properties.
+  - `commit` raises if a triple it would remove is not an explicit triple of the target graph: a
+    value that the store only infers, a value that another writer changed after the call read it,
+    or a `named_graph` that does not hold the instance.
+- **Known limit:** a triple that is both explicit and inferred passes the check of `commit`. After
+  the commit it is still visible, because a delete clears only the explicit triple.
+
+### Fixed
+
+- Data that links through a property its class does not have raises the `ValueError` that names
+  the property. Before, an `AttributeError` from describing the unfinished node replaced it.
+- The warnings for an instance with several classes, and for a class with several labels or
+  comments, name the value that is used. Before, they said "the first one", which was not the one
+  used.
+
+- **`OGM.create` and `OGM.commit` now raise every error from the triple store interface
+  unchanged, with its type and its message.** Before, both raised a bare `Exception` in its
+  place, so a caller that caught `TripleStoreInterfaceError` missed a SHACL refusal. To catch a
+  refusal, catch `TripleStoreInterfaceError`. A connection error or a timeout from `requests`
+  also reaches the caller unchanged. A caller that catches `Exception` still catches every error.
+  Two things change for that caller:
+
+  - The messages `Failed to persist instance.` and `Failed to update instance in database.` are
+    gone.
+  - `__cause__` no longer holds the error from the triple store interface.
+
+- **An OWL restriction no longer makes a field required.** Under the Open World Assumption, a
+  missing value is unknown, not false. Before, `owl:someValuesFrom`, `owl:minCardinality` and
+  `owl:cardinality` made the generated pydantic field required and gave a list a minimum length.
+  So `OGM.create`, `OGM.commit` and a materializing fetch refused an instance without such a
+  value. An example is a parameter whose device has not sent a value yet. Now that property
+  gives an empty list, a single-valued one too (see the next entry). The type of the values and
+  their maximum count still apply, and a value over the maximum is still refused before the write.
+  `PropertySpec.required` is now always `False`. `NodeValidator` still logs a warning for fewer
+  values than the OWL minimum.
+
+- **A single-valued property holds its one value.** A property whose maximum is one, from
+  `owl:FunctionalProperty`, `owl:cardinality 1` or `owl:maxCardinality 1`, now gives a list of at
+  most one, as every other property gives a list: `[value]`, or `[]` without a value. Before, its
+  field was a scalar, `None` without a value. But the data of a `Node` is a list for each
+  property, so `OGM.create` refused the one value as well as two, and a materializing
+  `OGM.fetch` of a stored value failed. So did `OGM.commit`, because it reads the stored instance
+  as a model before it changes it. Now the shape of the data never depends on a cardinality
+  declaration, and a fetch, `model_dump()`, commit cycle needs no conversion. A second value is
+  still refused before the write, and now the error names the maximum: "List should have at most
+  1 item". Code that reads such a field must change: `model.x[0]` reads the value that `model.x`
+  read, and `model.x == []` replaces `model.x is None`. A property that only an `sh:maxCount 1` shape
+  makes single-valued is not refused yet, because the OGM does not read SHACL shapes yet.
+
 ## 0.2.0 — 2026-08-12
 
 First release cut through the release mechanism, and the first published from
@@ -29,8 +110,8 @@ true — this is usable, several projects run against it, and the API may still 
 
 ### Added
 
-- **Four new modules implement Skolemised identity for anonymous nodes, per
-  SAWeindel/kapps_ogm#6 and PRD requirements R1–R6.** The requirements document is
+- **Four new modules implement Skolemised identity for anonymous nodes, per PRD
+  requirements R1–R6.** The requirements document is
   `kapps_semantic_middleware`'s anonymous-node-identity PRD, which is development-repository
   material and does not ship with this distribution; this entry is the record that ships.
   `kapps_ogm/utils/skolem.py` provides `mint_skolem_iri()` and `is_skolem_iri()`, plus
@@ -66,11 +147,11 @@ true — this is usable, several projects run against it, and the API may still 
   | Differing cardinalities | Most restrictive wins (min is the maximum of the minima, max the minimum of the maxima); unsatisfiable result raises |
   | Named class range mixed with an anonymous restriction range | Raise |
   | Two unrelated named class ranges | Raise, as before |
-  | A datatype target merged with a class target | Raise — the value cannot be both (added by #20) |
+  | A datatype target merged with a class target | Raise — the value cannot be both (added with the `value_kind` fix in the next entry) |
 
   The subsumption filter (commit `3a86137`) is narrowed to named ranges: it now carries an `isIRI(?sub) && isIRI(?obj)` guard. It exists to pick the most specific *named* class; without the guard it could discard an anonymous restriction range and silently drop half a merge. A cross-product defect is fixed in passing: when a property's `rdfs:range` was a bare `owl:Restriction` rather than an `owl:Class` with `owl:intersectionOf`, both structural `OPTIONAL`s in `_specify_complex_property`'s query failed, `?restriction` stayed unbound, and the following `OPTIONAL { ?restriction owl:onProperty ?onProperty }` matched **every restriction in the repository**. Binding `?restriction` in a `UNION` before the detail `OPTIONAL`s removes it. Walking the chain made fixing it necessary, since it multiplies the number of ranges reaching that query. The structural metadata (`unionOf`, `complementOf`, `oneOf`) moved to its own query for the same reason: reading it off "the first binding" is meaningless once several ranges contribute. The walk uses the SPARQL property path `rdfs:subPropertyOf*`, evaluated as a transitive closure, so a cyclic `rdfs:subPropertyOf` assertion terminates by construction rather than needing a guard in Python.
 
-  Requiredness is deliberately untouched: `owl:someValuesFrom` still sets `min_count = 1`. That it must not, under the Open World Assumption, is ticket `SAWeindel/kapps_ogm#11`. The merge as implemented cannot make a shape harder to satisfy than its most restrictive part, which is the constraint #11 places on this change. Ticket `SAWeindel/kapps_ogm#7` supersedes and completes `#1`; the specification of record is requirement **R7** of `kapps_semantic_middleware`'s anonymous-node-identity PRD, and its root ADR 0002 records the RDFS reading. Both are development-repository records and neither ships here. This unblocks `#10` and `#12`, which could not be fixed while every fetch of real data carried undeclared properties.
+  Requiredness is deliberately untouched: `owl:someValuesFrom` still sets `min_count = 1`. That it must not, under the Open World Assumption, is open work. The merge as implemented cannot make a shape harder to satisfy than its most restrictive part, which is the constraint that open work places on this change. The specification of record is requirement **R7** of `kapps_semantic_middleware`'s anonymous-node-identity PRD, and its root ADR 0002 records the RDFS reading. Both are development-repository records and neither ships here. This unblocks two further fixes that could not land while every fetch of real data carried undeclared properties.
 
 - **A nested property's `value_kind` was inferred from the *presence* of `owl:someValuesFrom` / `owl:allValuesFrom` rather than from what the keyword points at, so every restriction was assumed to constrain a literal.** `owl:allValuesFrom xsd:string` constrains a literal; `owl:allValuesFrom cfc:Unit` constrains an object, and both are legal OWL. `XSDToPythonTypes` is a plain `dict` and both lookups used `[]`, so a class target raised `KeyError` carrying nothing but the IRI — a poor diagnostic for a domain engineer who wrote a legal restriction. The intended fallback was **dead code**: the `someValuesFrom` branch already read `if range_type: ... else: nested_spec.some_from = range_iri`, which says exactly the right thing, but the `[]` lookup on the line above raised first so the `else` could never run; the intent was `.get()`. The codebase contradicted itself — `to_pydantic_field`'s LITERAL branch already raised `"Literal property ... cannot have allValuesFrom as Object IRI"`, so one site assumed class targets impossible while another explicitly rejected them.
 
@@ -80,9 +161,9 @@ true — this is usable, several projects run against it, and the API may still 
 
   Datatype-ness is decided by **namespace**, not by membership of `XSDToPythonTypes`. That map covers 33 datatypes, so `xsd:gMonth`, `xsd:gDay` and `xsd:dateTimeStamp` are absent from it, and reading a miss as "then it must be a class" would silently give those restrictions an `IRI` field type and demand references where the ontology asked for literals — trading a loud failure for a quiet misclassification. A target in the XSD namespace, or one of `rdf:XMLLiteral`, `rdf:langString` and `rdfs:Literal`, is a datatype; if it is one the map cannot resolve, that raises with a message naming the property and the datatype rather than falling through to the class branch.
 
-  Zero non-XSD `some`/`allValuesFrom` restrictions exist in either live GraphDB repository (`Tests`, `OGM`), measured 2026-07-28, so no current data changes behaviour. This is a correctness fix, not a migration. Note also that the `isinstance(self.all_from, IRI)` guard in `to_pydantic_field` is deliberately retained: it becomes unreachable from `specify` but still guards a hand-built `PropertySpec`, and an existing test depends on it. `min_count = 1` on `owl:someValuesFrom` is untouched; that it should not be, under the Open World Assumption, remains `SAWeindel/kapps_ogm#11`.
+  Zero non-XSD `some`/`allValuesFrom` restrictions exist in either live GraphDB repository (`Tests`, `OGM`), measured 2026-07-28, so no current data changes behaviour. This is a correctness fix, not a migration. Note also that the `isinstance(self.all_from, IRI)` guard in `to_pydantic_field` is deliberately retained: it becomes unreachable from `specify` but still guards a hand-built `PropertySpec`, and an existing test depends on it. `min_count = 1` on `owl:someValuesFrom` is untouched; that it should not be, under the Open World Assumption, remains open work.
 
-  The ticket is `SAWeindel/kapps_ogm#20`. It was raised from the design session held while implementing `#7`, whose `rdfs:subPropertyOf*` walk is what widened the defect's blast radius — a restriction on any *ancestor* can now reach it, not only one on the property itself. Root ADR 0001 of `EHoffm/kapps_semantic_middleware` is what requires this entry.
+  The defect was found in the design session for the range merge in the previous entry, whose `rdfs:subPropertyOf*` walk is what widened its blast radius — a restriction on any *ancestor* can now reach it, not only one on the property itself. Root ADR 0001 of `EHoffm/kapps_semantic_middleware` is what requires this entry.
 
 - **Anonymous nodes lost their identity on every write; they are now Skolemised.** The
   anonymous node behind a `COMPLEX` property — every parameter node in the Circular Factory
@@ -139,9 +220,9 @@ true — this is usable, several projects run against it, and the API may still 
   them — so a legacy node loses them exactly once. This is bounded in practice because only
   the TBox is seeded in productive environments; all ABox data is written through the OGM
   and is therefore skolemised from the outset. Converting a whole resource up front, and the
-  inverse deskolemise, are #9 (PRD R12). Merging the interface restrictions so that
-  connection metadata becomes declared — which is what stops even that one-time loss — is
-  #7 (PRD R7). Entity deletion stays unsupported; canonical (isomorphism-preserving)
+  inverse deskolemise, are PRD R12 and not built here. Merging the interface restrictions so
+  that connection metadata becomes declared — which is what stops even that one-time loss — is
+  PRD R7, the range merge above. Entity deletion stays unsupported; canonical (isomorphism-preserving)
   Skolemisation is explicitly not what was built, since identity here is per node, not
   derived from content, which is what a locator needs.
 
@@ -179,9 +260,9 @@ true — this is usable, several projects run against it, and the API may still 
   moving one parameter's properties onto another parameter's node. That is a worse failure than
   losing an address, so it now raises `AmbiguousNodeAlignmentError` rather than guessing.
   Clearing a property entirely stays legal — there is nothing left to misassign. Reordering an
-  equal-length list is still undetectable from position alone; that is filed as **#18** and
+  equal-length list is still undetectable from position alone; that is a known limitation and
   cannot arise until one property carries two or more anonymous nodes, which no current domain
-  model does. Closing it wants content-based matching, and probably #7 first — under the locator
+  model does. Closing it wants content-based matching, and probably the range merge first — under the locator
   pattern (ADR 0024) two sibling parameter nodes carry a unit and metadata but no value, so they
   are frequently content-identical and ties are the normal case rather than the edge case.
 
@@ -211,12 +292,12 @@ true — this is usable, several projects run against it, and the API may still 
   passed to both `create` and `fetch`) encodes the *previous* middleware's call
   pattern, which pins the OGM interface while its only real consumer is being
   rebuilt; and it never reached its own assertion, failing instead inside
-  `ogm.create` on the unrelated defect tracked as #13. A permanently-red test that
+  `ogm.create` on the unrelated `ClassScope` coverage defect described under *Fixed* below. A permanently-red test that
   fails before the property it exists to check asserts nothing.
 
   The contract and the demonstration role are both still wanted: reinstating them
-  against the rebuilt middleware is tracked as #16, which carries the removed source
-  verbatim for reconstruction. Its fixture data,
+  against the rebuilt middleware is open work; the removed source stays in this
+  repository's history for reconstruction. Its fixture data,
   `tests/test_data/TransferUnit1_data.json`, is deliberately retained and is
   currently unreferenced.
 
@@ -233,7 +314,7 @@ true — this is usable, several projects run against it, and the API may still 
 
   Only that last stretch needed `aas_middleware` and `uvicorn`, and neither is
   declared in `pyproject.toml`; `aas_middleware` was deliberately dropped in 279851e
-  ("This will break demos"). Once #15 was fixed, this script was the only thing in
+  ("This will break demos"). Once the manifest was fixed (under *Fixed* below), this script was the only thing in
   the repository that still could not be run from a clean environment built from the
   manifest — **with it gone, every remaining script and test can.** It also encoded
   the previous middleware's call pattern and carried a hardcoded GraphDB hostname.
@@ -242,8 +323,8 @@ true — this is usable, several projects run against it, and the API may still 
   `kapps_semantic_middleware` rather than construct `aas_middleware` directly — and
   that half cannot live in this repository, since the middleware already depends on
   `kapps_ogm` and a demo here driving it would close a dependency cycle. The OGM-only
-  portion is #17 and is blocked on nothing; the end-to-end portion is
-  `EHoffm/kapps_semantic_middleware#56`. The four generated artefacts under
+  portion is blocked on nothing; the end-to-end portion belongs to
+  `kapps_semantic_middleware`. The four generated artefacts under
   `scripts/output/` are retained for reference and are now stale and unreferenced.
 
 ### Fixed
@@ -276,7 +357,7 @@ true — this is usable, several projects run against it, and the API may still 
   than relying on a developer machine that has accumulated packages. The suite now
   collects all 84 tests with zero collection errors, and 83 pass. The one remaining
   failure, `test_roundtrip[…TransferUnit…]`, is a pre-existing product defect
-  unrelated to packaging and already tracked as #13: `OGM.create` raises from
+  unrelated to packaging: `OGM.create` raises from
   `_recursive_update_nodes_class_spec` (`kapps_ogm/node/core.py`) because the
   `ClassScope` built from the test's property chains does not cover the `isOccupied`
   property present in the data. It aborts inside `ogm.create`, well before any
@@ -286,7 +367,7 @@ true — this is usable, several projects run against it, and the API may still 
   aas_middleware`, and is now the only consumer of an undeclared package left in the
   repository. That is the breakage commit 279851e knowingly accepted ("This will
   break demos"), and `scripts/` is outside this fix's scope, but it means the demos
-  are still not runnable from the manifest alone. Reported as #15 and fixed here.
+  are still not runnable from the manifest alone. Fixed here: the script is removed, see *Removed* above.
 
 - **`OGM.commit` could not add or remove properties — only replace equal counts,
   and crashed on any `xsd:dateTime` property.** Three related defects, all on the

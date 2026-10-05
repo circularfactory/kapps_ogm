@@ -6,6 +6,7 @@ Tests Phase 1.3: Node ID Injection
 - Preservation of existing IDs
 - Duplicate IRI detection
 - Pydantic validation during creation
+- Store and validation errors reaching the caller with their own type
 """
 
 import pytest
@@ -13,6 +14,7 @@ from unittest.mock import Mock, patch
 from pydantic import ValidationError, BaseModel
 
 from kapps_triplestore_interface import IRI
+from kapps_triplestore_interface.exceptions import TripleStoreInterfaceError
 from kapps_ogm.node.core import Node
 from kapps_ogm.mapping.class_spec import ClassSpec
 from kapps_ogm.mapping.property_spec import PropertySpec
@@ -147,3 +149,44 @@ class TestOGMCreate:
                 ogm_with_mock_db.create(
                     class_iri=TRANSFER_UNIT_IRI, data=data, instance_iri=INSTANCE_IRI
                 )
+
+    def test_create_propagates_store_error(
+        self, ogm_with_mock_db, mock_db, simple_class_spec, store_error
+    ):
+        """Test that a write the store refuses reaches the caller as the store's own error."""
+        mock_db.triples_add.side_effect = store_error
+        simple_class_spec.to_pydantic_model.return_value = Mock()
+        data = {IRI("rdfs:label"): ["Test Unit"]}
+
+        with patch.object(
+            ogm_with_mock_db, "get_class_spec", return_value=simple_class_spec
+        ):
+            with pytest.raises(TripleStoreInterfaceError) as caught:
+                ogm_with_mock_db.create(
+                    class_iri=TRANSFER_UNIT_IRI, data=data, instance_iri=INSTANCE_IRI
+                )
+
+        assert caught.value is store_error
+        assert caught.value.__cause__ is None
+
+    def test_create_keeps_the_validation_error_type(
+        self, ogm_with_mock_db, mock_db, simple_class_spec
+    ):
+        """Test that a validation error keeps its own type, and the store is not asked to write."""
+
+        class RequiresAField(BaseModel):
+            required_field: int
+
+        simple_class_spec.to_pydantic_model.return_value = RequiresAField
+        data = {IRI("rdfs:label"): ["Test Unit"]}
+
+        with patch.object(
+            ogm_with_mock_db, "get_class_spec", return_value=simple_class_spec
+        ):
+            with pytest.raises(ValidationError) as caught:
+                ogm_with_mock_db.create(
+                    class_iri=TRANSFER_UNIT_IRI, data=data, instance_iri=INSTANCE_IRI
+                )
+
+        assert not isinstance(caught.value, TripleStoreInterfaceError)
+        mock_db.triples_add.assert_not_called()

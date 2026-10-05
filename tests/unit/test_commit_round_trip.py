@@ -12,14 +12,19 @@ replacement, unlinks the real node and strands everything the ClassSpec does not
 The fixture mirrors the failure recorded on the ticket: a conveyor belt whose speed parameter
 carries a value and a unit (both declared by the range restriction) plus an MQTT topic (not
 declared, and normal under the Open World Assumption).
+
+Two failures close the file: a write the store refuses, and a value the class rejects. Each
+reaches the caller with its own type.
 """
 
 from unittest.mock import Mock, patch
 
 import pytest
+from pydantic import ValidationError
 from rdflib import BNode
 
 from kapps_triplestore_interface import GraphDB, IRI, to_literal
+from kapps_triplestore_interface.exceptions import TripleStoreInterfaceError
 
 from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
@@ -72,9 +77,13 @@ def build_belt_spec() -> ClassSpec:
     )
 
 
-def seeded_ogm(parameter_id) -> tuple[OGM, Mock]:
-    """An OGM over a store holding one belt, whose speed node carries an undeclared MQTT topic."""
+def seeded_ogm(parameter_id, store_error=None) -> tuple[OGM, Mock]:
+    """An OGM over a store holding one belt, whose speed node carries an undeclared MQTT topic.
+
+    With ``store_error``, the store raises it on the write.
+    """
     db = Mock(spec=GraphDB)
+    db.triples_update.side_effect = store_error
     db.triples_get.return_value = []
     db.iri_exists.return_value = False
     db.is_subclass.return_value = True
@@ -95,9 +104,8 @@ def seeded_ogm(parameter_id) -> tuple[OGM, Mock]:
     return OGM(db=db), db
 
 
-def round_trip(parameter_id, new_value=None) -> tuple[set, set, dict]:
-    """Fetch, dump, optionally edit the speed, commit. Returns what the store was asked to change."""
-    ogm, db = seeded_ogm(parameter_id)
+def edit_and_commit(ogm, new_value=None) -> dict:
+    """Fetch, dump, optionally edit the speed, commit. Returns the payload it committed."""
     spec = build_belt_spec()
 
     with patch.object(ogm, "get_class_spec", return_value=spec):
@@ -109,6 +117,14 @@ def round_trip(parameter_id, new_value=None) -> tuple[set, set, dict]:
             payload[HAS_SPEED.lined][0][HAS_VALUE.lined] = [new_value]
 
         ogm.commit(instance_iri=BELT_IRI, data=payload)
+
+    return payload
+
+
+def round_trip(parameter_id, new_value=None) -> tuple[set, set, dict]:
+    """Fetch, dump, optionally edit the speed, commit. Returns what the store was asked to change."""
+    ogm, db = seeded_ogm(parameter_id)
+    payload = edit_and_commit(ogm, new_value)
 
     call = db.triples_update.call_args
     return call.kwargs["old_triples"], call.kwargs["new_triples"], payload
@@ -169,6 +185,28 @@ class TestAChangedValue:
         assert not any(
             isinstance(term, BNode) for triple in removed | added for term in triple
         )
+
+
+class TestARefusedCommit:
+    """A write the store refuses reaches the caller as the store's own error."""
+
+    def test_the_store_error_propagates_unchanged(self, store_error):
+        ogm, _ = seeded_ogm(PARAMETER_IRI, store_error=store_error)
+        with pytest.raises(TripleStoreInterfaceError) as caught:
+            edit_and_commit(ogm, UPDATED_VALUE)
+        assert caught.value is store_error
+        assert caught.value.__cause__ is None
+
+
+class TestAnInvalidValue:
+    """A value the class rejects fails validation before the store is asked to write."""
+
+    def test_the_validation_error_keeps_its_own_type(self):
+        ogm, db = seeded_ogm(PARAMETER_IRI)
+        with pytest.raises(ValidationError) as caught:
+            edit_and_commit(ogm, "fast")
+        assert not isinstance(caught.value, TripleStoreInterfaceError)
+        db.triples_update.assert_not_called()
 
 
 class TestALegacyBlankNode:

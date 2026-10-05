@@ -7,16 +7,15 @@
 # reason this file exists, and fetch-depth: 0 below is what lets it read the
 # whole history rather than the one commit a shallow checkout would give it.
 #
-# Pinned to Python 3.12: release_checks.py uses pathlib.Path.walk, which is 3.12+.
-# The package's own floor is 3.12 as well, so the two happen to agree here -- but
-# the pin belongs to the check and must not drift down with the package if that
-# floor is ever lowered.
+# workflow_call is what lets publish.yml run this same job before the upload,
+# so a failing check stops the upload: one definition of hygiene, two callers.
 
 name: hygiene
 
 on:
   push:
   pull_request:
+  workflow_call:
 
 jobs:
   hygiene:
@@ -30,3 +29,16 @@ jobs:
           python-version: '3.12'
       - name: Run the release hygiene checks
         run: python scripts/release_checks.py .
+
+      # A tool published under the org but carrying no cf-tool topic is absent
+      # from the front door, which is a thing nobody notices by looking at the
+      # repository. release_checks.py is not the place for it: that file is
+      # stdlib-only and judges a tree, and this needs the API.
+      - name: Front-door registration
+        if: startsWith(github.repository, 'circularfactory/')
+        run: |
+          gh api repos/${{ github.repository }} --jq '.topics[]' | grep -qx cf-tool || {
+            echo "::error::Published under circularfactory but carries no cf-tool topic, so it is absent from the front door."
+            exit 1; }
+        env:
+          GH_TOKEN: ${{ github.token }}

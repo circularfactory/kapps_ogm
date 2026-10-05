@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, Optional, Sequence, Union, overload
 import logging
 import pydantic as pd
+from rdflib import BNode
 
 from kapps_triplestore_interface import GraphDB, IRI
 from kapps_triplestore_interface.utils.types import GraphNameLike
@@ -22,6 +24,63 @@ from kapps_ogm.utils.skolem import (
     mint_skolem_iri,
     validate_skolem_namespace,
 )
+
+
+@dataclass(frozen=True)
+class Create:
+    """A new instance, written by OGM.commit together with the other changes of one call.
+
+    Args:
+        class_iri: IRI of the class to instantiate
+        data: Data dictionary for the new instance (must conform to the class)
+        instance_iri: Optional IRI for the new instance. Give it when another change in the
+            same call refers to the new instance. Otherwise the IRI is minted during the call.
+        class_scope: Optional ClassScope, as for OGM.create
+    """
+
+    class_iri: IRI
+    data: dict
+    instance_iri: Optional[IRI] = None
+    class_scope: Optional[ClassScope] = None
+
+
+@dataclass(frozen=True)
+class Update:
+    """A change to an existing instance, written by OGM.commit together with the other changes
+    of one call.
+
+    Args:
+        instance_iri: IRI of the instance to update
+        data: Data dictionary, as for a commit of one instance. Each property it names replaces
+            the stored values of that property, and [] removes the property. A property it
+            does not name keeps its stored values.
+    """
+
+    instance_iri: IRI
+    data: dict
+
+
+Change = Union[Create, Update]
+
+RDF_TYPE = IRI("rdf:type")
+
+
+def _created_instances(triples: set) -> list[IRI]:
+    """The instances that a create writes about: the new instance and each nested instance its
+    data gives with properties. A link writes only a triple whose subject is one of them.
+    """
+    return sorted(
+        {subject for subject, _, _ in triples if not isinstance(subject, BNode)}
+    )
+
+
+def _described_instances(triples: set) -> set[IRI]:
+    """The named instances that ``triples`` state something about, apart from their types."""
+    return {
+        subject
+        for subject, predicate, _ in triples
+        if not isinstance(subject, BNode) and IRI(predicate) != RDF_TYPE
+    }
 
 
 class OGM:
@@ -105,20 +164,76 @@ class OGM:
     ) -> Node:
         """
         Create a new Node instance with given data.
+
+        ``create`` writes only what it creates. The data decides what that is. A nested value
+        given by its IRI alone, as ``{"id": iri}`` with no other key or as an IRI, is a link:
+        ``create`` writes the triple that points at it and nothing about the linked instance,
+        even when ``class_scope`` hydrates its class. The linked instance may exist. A nested
+        value with properties is created with the new instance, under its given ``id`` or under
+        a minted IRI.
+
+        A normal return means that the store admitted the write: it found that none of the
+        instances to create exists yet, and it committed the triples. See "What create and
+        commit promise" in the README.
+
         Args:
             class_iri: IRI of the class to instantiate
             class_scope: ClassScope defining the class and property structure
-            data: Data dictionary for the instance (must conform to class_spec)
+            data: Data dictionary for the instance (must conform to the class)
             instance_iri: Optional IRI for the new instance (if not provided, a new one will be generated)
             persist: Whether to persist the new instance to the graph database
+            named_graph: Optional named graph to persist the new instance to
         Returns:
             Node representing the newly created instance
+        Raises:
+            ValueError: If the data does not fit the class.
+            kapps_triplestore_interface.exceptions.PreconditionFailedError: If an instance it
+                would create already exists: the target graph holds an explicit triple whose
+                subject is the new instance or a nested instance that the data gives with
+                properties. The target graph is ``named_graph`` if it is given, and otherwise
+                the one the triple store interface writes to without it. Nothing is written. It
+                propagates unchanged.
+            kapps_triplestore_interface.exceptions.TripleStoreInterfaceError: If the triple
+                store interface rejects the triples, or the store answers the write with an
+                error, for example a SHACL refusal. It propagates unchanged.
+            requests.exceptions.RequestException: If the triple store cannot be reached, for
+                example on a connection error or a timeout. It propagates unchanged.
 
         This is the primary entry point for:
+
         - REST POST
         - API writes
         - JSON import
+
+        To create an instance in the same write as other changes, pass a ``Create`` to
+        ``OGM.commit``.
         """
+        node = self._new_node(
+            class_iri=class_iri,
+            data=data,
+            class_scope=class_scope,
+            instance_iri=instance_iri,
+        )
+
+        if persist:
+            triples = node.to_triples(links_from_data=True)
+            self.db.triples_add(
+                triples,
+                named_graph=named_graph,
+                absent_subjects=_created_instances(triples),
+            )
+
+        return node
+
+    def _new_node(
+        self,
+        *,
+        class_iri: IRI,
+        data: dict,
+        class_scope: Optional[ClassScope],
+        instance_iri: Optional[IRI],
+    ) -> Node:
+        """A materialized Node for a new instance. Nothing is written."""
         class_scope = class_scope or (
             self.loader.expand(class_iri) if self.loader else None
         )
@@ -135,14 +250,6 @@ class OGM:
         )
 
         node.materialize()
-
-        if persist:
-            triples = node.to_triples()
-            try:
-                self.db.triples_add(triples, named_graph=named_graph)
-            except Exception as e:
-                raise Exception("Failed to persist instance.") from e
-
         return node
 
     def create_blank_instance(
@@ -329,13 +436,14 @@ class OGM:
                 raise ValueError(
                     f"Could not determine class IRI for instance {instance_iri}"
                 )
-            if len(class_iri_set) > 1:
+            class_iri = class_iri_set.pop()
+            if class_iri_set:
                 self.logger.warning(
-                    "Instance %s has multiple classes %s, using the first one.",
+                    "Instance %s has multiple classes, using %s and not %s.",
                     instance_iri,
+                    class_iri,
                     class_iri_set,
                 )
-            class_iri = class_iri_set.pop()
             class_spec = self.get_class_spec(
                 class_iri=class_iri,
                 class_scope=class_scope,
@@ -393,22 +501,188 @@ class OGM:
     # updating existing instances
     # ------------------------------------------------------------------
 
+    @overload
     def commit(
         self,
         *,
         instance_iri: IRI,
         data: dict,
         named_graph: Optional[GraphNameLike] = None,
-    ) -> Node:
+    ) -> Node: ...
+
+    @overload
+    def commit(
+        self,
+        *,
+        changes: Sequence[Change],
+        named_graph: Optional[GraphNameLike] = None,
+    ) -> list[Node]: ...
+
+    def commit(
+        self,
+        *,
+        instance_iri: Optional[IRI] = None,
+        data: Optional[dict] = None,
+        changes: Optional[Sequence[Change]] = None,
+        named_graph: Optional[GraphNameLike] = None,
+    ) -> Union[Node, list[Node]]:
         """
-        Update a Node instance with given data.
+        Update an instance with given data, or write the changes to several instances as one.
+
+        Give either ``instance_iri`` and ``data``, which update one instance, or ``changes``.
+
+        ``changes`` holds ``Create`` and ``Update`` entries, each for a different instance.
+        All of them are validated and read first, and then written as one ``DELETE/INSERT``,
+        so the store admits all of them or none of them. A change can refer to an instance
+        that a ``Create`` in the same call makes. A ``Create`` writes only what it creates, as
+        ``OGM.create`` does: a nested value given by its IRI alone is a link. An empty
+        ``changes`` writes nothing.
+
+        The triples to remove come from a full read of the stored instance, inferred triples
+        included. The store removes only explicit triples of the target graph, so it checks the
+        triples to remove against those. A normal return means that the store admitted the
+        write: each triple to remove was an explicit triple of the target graph, no instance
+        to create existed, and the store committed the change. When the data changes nothing,
+        nothing is sent, because there is nothing to admit. A triple that is both explicit and
+        inferred passes the check, and stays visible after the commit, because a delete clears
+        only the explicit triple. See "What create and commit promise" in the README.
+
         Args:
             instance_iri: IRI of the instance to update
-            data: Data dictionary for the instance (must conform to class_spec)
+            data: Data dictionary for the instance (must conform to the class)
+            changes: The changes to write in one update request, instead of ``instance_iri``
+                and ``data``
             named_graph: Optional named graph to persist the changes to
         Returns:
-            Node representing the newly updated instance
+            Node representing the newly updated instance. With ``changes``, a list with one
+            Node for each change, in the same order.
+        Raises:
+            TypeError: If both forms or neither are given, or ``changes`` holds an entry that
+                is not a ``Create`` or an ``Update``.
+            ValueError: If the store holds no class for an instance to update, or the data does
+                not fit the class. AmbiguousNodeAlignmentError and UnresolvableNodeAddressError
+                are subclasses. With ``changes``, also if two changes write the same instance:
+                the instance a change names, or a named instance that its data nests with
+                properties. Types do not count. Nothing is written in any of these cases.
+            kapps_triplestore_interface.exceptions.PreconditionFailedError: If a triple it
+                would remove is not an explicit triple of the target graph. That is the case
+                for a value that the store only infers, for a value that another writer changed
+                after this call read it, and for a ``named_graph`` that does not hold the
+                instance. With ``changes``, also if an instance that a ``Create`` would create
+                already exists, as for ``OGM.create``. The target graph is ``named_graph`` if it
+                is given, and otherwise the one the triple store interface writes to without it.
+                Nothing of the call is written. It propagates unchanged.
+            kapps_triplestore_interface.exceptions.TripleStoreInterfaceError: If the triple
+                store interface rejects the triples, or the store answers the write with an
+                error, for example a SHACL refusal. It propagates unchanged. A refusal of one
+                change refuses all changes of the call.
+            requests.exceptions.RequestException: If the triple store cannot be reached, for
+                example on a connection error or a timeout. It propagates unchanged.
         """
+        if changes is None:
+            if instance_iri is None or data is None:
+                raise TypeError("commit() takes instance_iri and data, or changes")
+            return self._commit(
+                [Update(instance_iri=instance_iri, data=data)], named_graph
+            )[0]
+
+        if instance_iri is not None or data is not None:
+            raise TypeError(
+                "commit() takes instance_iri and data, or changes, but not both"
+            )
+        return self._commit(list(changes), named_graph)
+
+    def _commit(
+        self,
+        changes: list[Change],
+        named_graph: Optional[GraphNameLike],
+    ) -> list[Node]:
+        """Validate and read every change, then write them all with one ``triples_update``."""
+        if not changes:
+            return []
+
+        named: set[IRI] = set()
+        for change in changes:
+            if not isinstance(change, (Create, Update)):
+                raise TypeError(
+                    f"commit() takes Create and Update changes, got {type(change).__name__}"
+                )
+            if change.instance_iri is None:
+                continue
+            iri = IRI(change.instance_iri)
+            if iri in named:
+                raise ValueError(
+                    f"Two changes name {iri}. Put all changes to one instance in one change."
+                )
+            named.add(iri)
+
+        nodes: list[Node] = []
+        old_triples: set = set()
+        new_triples: set = set()
+        created: set[IRI] = set()
+        writers: dict[IRI, int] = {}
+        for index, change in enumerate(changes):
+            if isinstance(change, Create):
+                node = self._new_node(
+                    class_iri=change.class_iri,
+                    data=change.data,
+                    class_scope=change.class_scope,
+                    instance_iri=change.instance_iri,
+                )
+                added = set(node.to_triples(links_from_data=True))
+                # A create that lands on an existing instance would merge into it, because an
+                # INSERT of statements the store already holds changes nothing. So the write
+                # requires that the store holds no statement about any instance it creates.
+                created.update(_created_instances(added))
+                if self.logger.isEnabledFor(logging.DEBUG):
+                    self.logger.debug(
+                        f"Creating instance {node.id}: adding {len(added)} triples:\n\n{format_triples_turtle(added)}",
+                    )
+                removed: set = set()
+            else:
+                node, removed, added = self._changed_node(
+                    instance_iri=IRI(change.instance_iri), data=change.data
+                )
+            # Each change is compared with the stored state on its own, so two changes that
+            # write one instance would each apply their own diff to it. The guard above sees only
+            # the named instances; this one also sees a named instance nested with properties.
+            # Types do not count: a link typed by its range states what the instance's own
+            # Create states.
+            for instance in _described_instances(removed | added):
+                first = writers.setdefault(instance, index)
+                if first != index:
+                    raise ValueError(
+                        f"Two changes write {instance} (positions {first} and {index}). "
+                        "Put all changes to one instance in one change."
+                    )
+            nodes.append(node)
+            old_triples |= removed
+            new_triples |= added
+
+        # triples_update sends one atomic DELETE/INSERT update request, so
+        # the removed and added triples are applied together. This is required for
+        # SHACL correctness: a replacement of a cardinality-constrained property (e.g.
+        # a possession handover under a "possessed by exactly one resource" shape)
+        # must never expose the intermediate state where the property is absent. It is
+        # also what makes the changes to several instances one write that the store
+        # admits or refuses as a whole.
+        self.db.triples_update(
+            old_triples=old_triples,
+            new_triples=new_triples,
+            named_graph=named_graph,
+            absent_subjects=sorted(created),
+        )
+
+        return nodes
+
+    def _changed_node(
+        self,
+        *,
+        instance_iri: IRI,
+        data: dict,
+    ) -> tuple[Node, set, set]:
+        """The Node that ``data`` makes of a stored instance, and the triples to remove and to
+        add. Nothing is written."""
         new_node = Node(id=instance_iri, data=data, ogm=self)
 
         class_iri_set = self.db.owl_get_classes_of_individual(instance_iri)
@@ -416,14 +690,15 @@ class OGM:
             raise ValueError(
                 f"Could not determine class IRI for instance {instance_iri}"
             )
-        if len(class_iri_set) > 1:
+        class_iri = class_iri_set.pop()
+        if class_iri_set:
             self.logger.warning(
-                "Instance %s has multiple classes %s, using the first one.",
+                "Instance %s has multiple classes, using %s and not %s.",
                 instance_iri,
+                class_iri,
                 class_iri_set,
             )
 
-        class_iri = class_iri_set.pop()
         class_scope = ClassScope.from_node_data(new_node)
         class_spec = self.get_class_spec(
             class_iri=class_iri,
@@ -461,21 +736,7 @@ class OGM:
                 f"Updating instance {instance_iri}: removing {len(old_triples)} triples, adding {len(new_triples)} triples:\n\n--- Old triples to be deleted ---\n{format_triples_turtle(old_triples)}\n\n--- New triples to be added ---\n{format_triples_turtle(new_triples)}",
             )
 
-        # triples_update issues a single atomic DELETE/INSERT SPARQL transaction, so
-        # the removed and added triples are applied together. This is required for
-        # SHACL correctness: a replacement of a cardinality-constrained property (e.g.
-        # a possession handover under a "possessed by exactly one resource" shape)
-        # must never expose the intermediate state where the property is absent.
-        try:
-            self.db.triples_update(
-                old_triples=old_triples,
-                new_triples=new_triples,
-                named_graph=named_graph,
-            )
-        except Exception as e:
-            raise Exception("Failed to update instance in database.") from e
-
-        return new_node
+        return new_node, old_triples, new_triples
 
     # ------------------------------------------------------------------
     # deletion of instances

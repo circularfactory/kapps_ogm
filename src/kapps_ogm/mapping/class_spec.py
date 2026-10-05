@@ -191,27 +191,27 @@ class ClassSpec:
             hydration_level=hydration_level,
         )
 
-        # Get the (first) label of the class
+        # Get one label of the class
         label_triples = db.triples_get(
             sub=class_iri, pred="rdfs:label", include_implicit=True
         )
         if label_triples:
-            if len(label_triples) > 1:
-                logger.warning(
-                    f"Class {class_iri} has multiple rdfs:label values; using the first one."
-                )
             class_spec.label = str(label_triples.pop()[2])
+            if label_triples:
+                logger.warning(
+                    f"Class {class_iri} has multiple rdfs:label values; using {class_spec.label!r}."
+                )
 
-        # Get the (first) comment of the class
+        # Get one comment of the class
         comment_triples = db.triples_get(
             sub=class_iri, pred="rdfs:comment", include_implicit=True
         )
         if comment_triples:
-            if len(comment_triples) > 1:
-                logger.warning(
-                    f"Class {class_iri} has multiple rdfs:comment values; using the first one."
-                )
             class_spec.comment = str(comment_triples.pop()[2])
+            if comment_triples:
+                logger.warning(
+                    f"Class {class_iri} has multiple rdfs:comment values; using {class_spec.comment!r}."
+                )
 
         # Get the superclasses of the class
         superclass_triples = db.triples_get(

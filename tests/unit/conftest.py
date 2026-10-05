@@ -6,6 +6,7 @@ import pytest
 from unittest.mock import Mock
 
 from kapps_triplestore_interface import GraphDB, GraphDBCredentials, IRI
+from kapps_triplestore_interface.exceptions import GraphDbException
 from kapps_ogm.ogm import OGM
 from kapps_ogm.mapping.class_spec import ClassSpec
 from kapps_ogm.node.core import Node
@@ -59,6 +60,16 @@ def mock_db():
     db.new_iri = lambda base, schema: schema(base)
 
     return db
+
+
+class StoreRefusal(GraphDbException):
+    """A subclass of `GraphDbException`. It proves that a subclass reaches the caller with its own type."""
+
+
+@pytest.fixture(params=[GraphDbException, StoreRefusal], ids=lambda cls: cls.__name__)
+def store_error(request):
+    """An error the triple store raises on a write, carrying a report in its message."""
+    return request.param("Error while querying GraphDB (500) - <validation report>")
 
 
 @pytest.fixture

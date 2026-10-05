@@ -180,6 +180,21 @@ class Node:
         if class_spec is None:
             raise ValueError(f"Node {self} has data but no matching ClassSpec")
 
+        # An IRI given as the value of an object property names the instance it links to. It
+        # means the same as ``{"id": iri}``, so it becomes the same Node: one with an id and no
+        # properties.
+        for property_iri, prop_spec in class_spec.properties.items():
+            domain_list = self.data.get(property_iri)
+            if prop_spec.value_kind is PropertyValueKind.OBJECT and domain_list:
+                self.data[property_iri] = [
+                    (
+                        Node(id=value, data={}, ogm=self.ogm)
+                        if isinstance(value, IRI)
+                        else value
+                    )
+                    for value in domain_list
+                ]
+
         # Recursively set class_specs for nested nodes
         # Find properties present both in data and class_spec that contain nodes, and are OBJECT or COMPLEX respectively
         data_properties = set(
@@ -198,9 +213,9 @@ class Node:
         )
         unknown_properties = data_properties - spec_properties
         if unknown_properties:
-            # TODO This error is thrown before self.__repr__ is possible, as self.instance is not yet set.
+            # Named by its IRI: the node is not materialized yet, so its repr would fail here.
             raise ValueError(
-                f"Node {self} data contains OBJECT or COMPLEX properties not defined in ClassSpec {class_spec}: {unknown_properties}"
+                f"Node {self.id!r} data contains OBJECT or COMPLEX properties not defined in ClassSpec {class_spec}: {unknown_properties}"
             )
         known_properties = data_properties & spec_properties
 
@@ -242,7 +257,7 @@ class Node:
         Notes:
             - This is the preferred way to access node data in application code.
             - Modifications to the returned instance must be persisted explicitly
-            via the OGM.
+              via the OGM.
         """
         if self.instance is not None and not reload:
             return self.instance

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from .core import Node
 
 
-def to_triples(self: "Node") -> set[Triple]:
+def to_triples(self: "Node", *, links_from_data: bool = False) -> set[Triple]:
     """Serialize the nodes current instance into RDF triples for persistence.
 
     Uses the in-memory materialized instance and cached data. Updates in
@@ -23,6 +23,14 @@ def to_triples(self: "Node") -> set[Triple]:
 
     Args:
         node: The Node instance to serialize.
+        links_from_data: If True, the data decides whether a nested value is a link or a node
+            of its own. A nested value that the data gives by its IRI alone, as ``{"id": iri}``
+            with no other key, is a link: only the triple that points at it is serialized, and
+            nothing about the linked node, even when its ClassSpec has properties. A nested
+            value with properties is serialized with its own triples. If False, the ClassSpec
+            decides: a nested value whose class has properties is always serialized with its
+            own triples. Creating an instance uses True, because a link must not write about
+            an instance that already exists.
 
     Returns:
         set[Triple]: RDF triples representing this node, including nested objects.
@@ -77,6 +85,7 @@ def to_triples(self: "Node") -> set[Triple]:
                 predicate=prop_iri,
                 value=v,
                 data_node=data_values[index] if index < len(data_values) else None,
+                links_from_data=links_from_data,
             )
 
     return triples
@@ -304,12 +313,24 @@ def _resolve_anonymous_address(
     )
 
 
+def _is_link(data_node: Any) -> bool:
+    """Whether the data gives a nested value by its IRI alone: a Node with an id and no
+    properties, as ``{"id": iri}`` or an IRI as the value of an object property makes it.
+    """
+    from .core import Node
+
+    return (
+        isinstance(data_node, Node) and data_node.id is not None and not data_node.data
+    )
+
+
 def _value_to_triples(
     self: "Node",
     subject: IRI,
     predicate: IRI,
     value: Any,
     data_node: Any = None,
+    links_from_data: bool = False,
 ) -> set[Triple]:
     """
     Convert a property value into RDF triples.
@@ -325,6 +346,7 @@ def _value_to_triples(
         value: The value to serialize (Pydantic model, IRI, or primitive).
         data_node: The Node recorded for this value in the parent's data, if any. Carries the
             address of an anonymous node.
+        links_from_data: As for to_triples.
 
     Returns:
         set[Triple]: RDF triples representing the value. Single triple for
@@ -363,6 +385,11 @@ def _value_to_triples(
         if nested_id and not iri_field_map:
             return triples
 
+        # A value that the data names by its IRI alone is a link. Its own triples belong to the
+        # linked node, which may exist already, so writing them would write about another node.
+        if links_from_data and _is_link(data_node):
+            return triples
+
         # Recurse - nested object serializes its own properties
         property_spec = (
             self.class_spec.properties.get(predicate, None) if self.class_spec else None
@@ -380,7 +407,7 @@ def _value_to_triples(
             data=data_node.data if isinstance(data_node, Node) else None,
             ogm=self.ogm,
         )
-        triples |= to_triples(nested_node)
+        triples |= to_triples(nested_node, links_from_data=links_from_data)
 
     # Case 2: IRI object
     elif isinstance(value, IRI):

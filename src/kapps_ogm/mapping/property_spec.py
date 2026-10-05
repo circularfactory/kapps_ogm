@@ -113,8 +113,14 @@ class PropertySpec:
 
     @property
     def required(self) -> bool:
-        if self.min_count is not None and self.min_count >= 1:
-            return True
+        """Whether a value must be present. No OWL restriction makes it so.
+
+        Under the Open World Assumption a missing triple is unknown, not false. So
+        `owl:someValuesFrom`, `owl:minCardinality` and `owl:cardinality` keep their lower
+        bound in `min_count`, which `NodeValidator` reports as a warning, but none of them
+        makes a value required. A minimum that must hold is a closed-world rule. It belongs
+        in a SHACL shape, which the store checks at the write.
+        """
         return False
 
     @property
@@ -138,7 +144,19 @@ class PropertySpec:
         return format_property_spec(self)
 
     def to_pydantic_field(self) -> tuple[Any, Any]:
-        """Convert this PropertySpec into a Pydantic field with validators."""
+        """Convert this PropertySpec into a Pydantic field with validators.
+
+        OWL describes what can be, not what must be. So the field takes two things from the
+        OWL restrictions: the type of its values and their maximum count. It takes no
+        minimum. `owl:someValuesFrom`, `owl:minCardinality` and `owl:cardinality` never make
+        the field required and never give it a minimum length. See `required`.
+
+        Every field is a list, and a property without a value gives `[]`. A single-valued
+        property, whose maximum is one from `owl:FunctionalProperty`, `owl:cardinality 1` or
+        `owl:maxCardinality 1`, gives a list of at most one. So the shape of the data never
+        depends on a cardinality declaration. A second value is refused, and the error names
+        the maximum.
+        """
         from .class_spec import ClassHydrationLevel
 
         if not self.value_kind in PropertyValueKind:
@@ -242,18 +260,11 @@ class PropertySpec:
             case _:
                 raise RuntimeError
 
-        # cardinality
-        min_count = self.min_count or 0
-        max_count = self.max_count
-
-        # Always treat multiple cardinality as list
-        is_multi = max_count is None or max_count > 1 or min_count > 1
-        if is_multi:
-            field_type = conlist(base_type, min_length=min_count, max_length=max_count)
-            default = ... if self.required else []
-        else:
-            field_type = base_type
-            default = ... if self.required else None
+        # Cardinality: the maximum only. An OWL minimum is not enforced here (see the
+        # docstring). Every field is a list, a single-valued one too, so the maximum sets the
+        # list's length and never whether it is a list.
+        field_type = conlist(base_type, max_length=self.max_count)
+        default = ... if self.required else []
 
         # Apply some_from / all_from validators using Annotated types
         if self.some_from or self.all_from:
@@ -263,7 +274,8 @@ class PropertySpec:
                     return v
                 values = v if isinstance(v, list) else [v]
 
-                if self.some_from is not None:
+                # Its type only: with no value, there is nothing for the type to check.
+                if self.some_from is not None and values:
                     if not any(
                         _satisfies_constraint(x, self.some_from) for x in values
                     ):

@@ -1,5 +1,5 @@
 from .node.core import Node
-from .ogm import OGM
+from .ogm import OGM, Create, Update
 
 # Import mapping specs
 from .mapping.class_spec import ClassSpec
@@ -17,6 +17,8 @@ __all__ = [
     # Core classes
     "Node",
     "OGM",
+    "Create",
+    "Update",
     # Mapping specs
     "ClassSpec",
     "PropertySpec",
