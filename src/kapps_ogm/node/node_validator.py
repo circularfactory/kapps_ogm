@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional
 import logging
 
 from kapps_ogm.mapping.property_spec import PropertyValueKind
+from kapps_ogm.utils.errors import OGMDataError, OGMUsageError, _one_or_none
 
 if TYPE_CHECKING:
     from .core import Node
@@ -31,21 +32,24 @@ class NodeValidator:
                    properties are permitted. Defaults to False.
 
         Raises:
-            ValueError: If validation fails or required data/ClassSpec is missing.
+            OGMDataError: If validation fails.
+            OGMUsageError: If the node has no data or no ClassSpec.
         """
         if node.data is None:
-            raise ValueError("Node does not contain data to validate")
+            raise OGMUsageError("Node does not contain data to validate")
 
         if node.class_spec is None:
-            raise ValueError("Cannot validate data without ClassSpec")
+            raise OGMUsageError("Cannot validate data without ClassSpec")
 
         # Check that node IRI is instance of ClassSpec IRI
         if node.id is not None and node.class_spec.iri is not None:
             if node.ogm.db.iri_exists(
                 node.id, as_sub=True, as_pred=True, as_obj=True
             ) and not node.ogm.db.is_subclass(node.id, node.class_spec.iri):
-                raise ValueError(
-                    f"Node IRI {node.id} is known but is not an instance of ClassSpec {node.class_spec.iri}"
+                raise OGMDataError(
+                    f"Node IRI {node.id} is known but is not an instance of ClassSpec {node.class_spec.iri}",
+                    instance_iri=node.id,
+                    class_iri=node.class_spec.iri,
                 )
 
         # Check that data properties conform to ClassSpec properties
@@ -57,8 +61,11 @@ class NodeValidator:
 
         if data_properties < required_properties:
             missing_properties = required_properties - data_properties
-            raise ValueError(
-                f"Missing required properties in data for ClassSpec {node.class_spec.iri}: {missing_properties}"
+            raise OGMDataError(
+                f"Missing required properties in data for ClassSpec {node.class_spec.iri}: {missing_properties}",
+                instance_iri=node.id,
+                property_iri=_one_or_none(missing_properties),
+                class_iri=node.class_spec.iri,
             )
 
         if data_properties > permitted_properties:
@@ -67,8 +74,11 @@ class NodeValidator:
                 f"Unknown properties in data for ClassSpec {node.class_spec.iri}: {unknown_properties}"
             )
             if strict:
-                raise ValueError(
-                    f"Unknown properties in data for ClassSpec {node.class_spec.iri}: {unknown_properties}"
+                raise OGMDataError(
+                    f"Unknown properties in data for ClassSpec {node.class_spec.iri}: {unknown_properties}",
+                    instance_iri=node.id,
+                    property_iri=_one_or_none(unknown_properties),
+                    class_iri=node.class_spec.iri,
                 )
 
         known_properties = data_properties & permitted_properties
@@ -84,8 +94,12 @@ class NodeValidator:
                     f"Node {node.id} property {property_iri} has fewer items ({len(domain_list)}) than min_count ({prop_spec.min_count})"
                 )
                 if strict:
-                    raise ValueError(
-                        f"Node {node.id} property {property_iri} has fewer items ({len(domain_list)}) than min_count ({prop_spec.min_count})"
+                    raise OGMDataError(
+                        f"Node {node.id} property {property_iri} has fewer items ({len(domain_list)}) than min_count ({prop_spec.min_count})",
+                        instance_iri=node.id,
+                        property_iri=property_iri,
+                        class_iri=node.class_spec.iri,
+                        value=domain_list,
                     )
 
             if prop_spec.max_count and len(domain_list) > prop_spec.max_count:
@@ -93,8 +107,12 @@ class NodeValidator:
                     f"Node {node.id} property {property_iri} has more items ({len(domain_list)}) than max_count ({prop_spec.max_count})"
                 )
                 if strict:
-                    raise ValueError(
-                        f"Node {node.id} property {property_iri} has more items ({len(domain_list)}) than max_count ({prop_spec.max_count})"
+                    raise OGMDataError(
+                        f"Node {node.id} property {property_iri} has more items ({len(domain_list)}) than max_count ({prop_spec.max_count})",
+                        instance_iri=node.id,
+                        property_iri=property_iri,
+                        class_iri=node.class_spec.iri,
+                        value=domain_list,
                     )
 
             # Check type
@@ -105,8 +123,12 @@ class NodeValidator:
                         from .core import Node
 
                         if not isinstance(domain_instance, Node):
-                            raise ValueError(
-                                f"Node {node.id} property {property_iri} expected Node instances, got literal {domain_instance}"
+                            raise OGMDataError(
+                                f"Node {node.id} property {property_iri} expected Node instances, got literal {domain_instance}",
+                                instance_iri=node.id,
+                                property_iri=property_iri,
+                                class_iri=node.class_spec.iri,
+                                value=domain_instance,
                             )
                         # Recursively validate nested nodes
                         NodeValidator.validate(domain_instance, strict=strict)
@@ -125,8 +147,12 @@ class NodeValidator:
                         isinstance(domain_instance, permitted_types)
                         for domain_instance in domain_list
                     ):
-                        raise ValueError(
-                            f"Node {node.id} property {property_iri} expected owl:allValuesFrom {permitted_types}, got {type(domain_instance)}"
+                        raise OGMDataError(
+                            f"Node {node.id} property {property_iri} expected owl:allValuesFrom {permitted_types}, got {type(domain_instance)}",
+                            instance_iri=node.id,
+                            property_iri=property_iri,
+                            class_iri=node.class_spec.iri,
+                            value=domain_list,
                         )
 
                     # owl:someValuesFrom. Only enforced in strict, according to the OWA.
@@ -138,6 +164,10 @@ class NodeValidator:
                             f"Node {node.id} property {property_iri} expected owl:someValuesFrom {permitted_types}, got {type(domain_instance)}"
                         )
                         if strict:
-                            raise ValueError(
-                                f"Node {node.id} property {property_iri} expected owl:someValuesFrom {permitted_types}, got {type(domain_instance)}"
+                            raise OGMDataError(
+                                f"Node {node.id} property {property_iri} expected owl:someValuesFrom {permitted_types}, got {type(domain_instance)}",
+                                instance_iri=node.id,
+                                property_iri=property_iri,
+                                class_iri=node.class_spec.iri,
+                                value=domain_list,
                             )

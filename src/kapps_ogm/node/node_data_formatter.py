@@ -7,6 +7,8 @@ import logging
 from rdflib import BNode
 from kapps_triplestore_interface import IRI
 
+from kapps_ogm.utils.errors import OGMUsageError
+
 if TYPE_CHECKING:
     from .core import Node
     from kapps_ogm.ogm import OGM
@@ -41,12 +43,12 @@ def sanitize_data(
             list values, and the node ID if the data carried one.
 
     Raises:
-        ValueError: If data cannot be converted into the expected format.
+        OGMUsageError: If data cannot be converted into the expected format.
     """
     from .core import Node
 
     if not isinstance(data, dict):
-        raise ValueError("Data must be a dictionary")
+        raise OGMUsageError("Data must be a dictionary")
 
     sanitized_data = {}
     node_id = None
@@ -70,10 +72,10 @@ def sanitize_data(
             try:
                 property_iri = IRI.from_lined(property_iri)
             except Exception:
-                raise ValueError(f"Invalid property in data: {property_iri}") from e
+                raise OGMUsageError(f"Invalid property in data: {property_iri}") from e
 
         if not isinstance(domain_list, list):
-            raise ValueError(
+            raise OGMUsageError(
                 f"Property {property_iri} data must be a list, got {type(domain_list)}"
             )
 

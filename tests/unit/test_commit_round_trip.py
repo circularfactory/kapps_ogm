@@ -23,7 +23,7 @@ import pytest
 from pydantic import ValidationError
 from rdflib import BNode
 
-from kapps_triplestore_interface import GraphDB, IRI, to_literal
+from kapps_triplestore_interface import IRI, TripleStore, to_literal
 from kapps_triplestore_interface.exceptions import TripleStoreInterfaceError
 
 from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
@@ -82,7 +82,7 @@ def seeded_ogm(parameter_id, store_error=None) -> tuple[OGM, Mock]:
 
     With ``store_error``, the store raises it on the write.
     """
-    db = Mock(spec=GraphDB)
+    db = Mock(spec=TripleStore)
     db.triples_update.side_effect = store_error
     db.triples_get.return_value = []
     db.iri_exists.return_value = False

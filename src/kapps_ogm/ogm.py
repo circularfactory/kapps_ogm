@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Sequence, Union, overload
+from typing import Any, Callable, Optional, Sequence, Union, cast, overload
 import logging
 import pydantic as pd
 from rdflib import BNode
 
-from kapps_triplestore_interface import GraphDB, IRI
-from kapps_triplestore_interface.utils.types import GraphNameLike
+from kapps_triplestore_interface import IRI, SPARQLQuery, TripleStore
+from kapps_triplestore_interface.utils.types import GraphNameLike, SubjectLike
 
 from kapps_ogm.node.core import Node
 from kapps_ogm.node.node_address import reconcile_anonymous_addresses
@@ -16,7 +16,12 @@ from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from kapps_ogm.utils.blank_instance import _create_blank_instance
 from kapps_ogm.utils.loader_strategy import LoaderStrategy
 from kapps_ogm.utils.class_scope import ClassScope
-from kapps_ogm.utils.errors import AnonymousNodeFetchError
+from kapps_ogm.utils.errors import (
+    AnonymousNodeFetchError,
+    OGMNotFoundError,
+    OGMUsageError,
+    OGMUsageTypeError,
+)
 from kapps_ogm.utils.pretty_print import format_triples_turtle
 from kapps_ogm.utils.skolem import (
     DEFAULT_SKOLEM_NAMESPACE,
@@ -65,7 +70,7 @@ Change = Union[Create, Update]
 RDF_TYPE = IRI("rdf:type")
 
 
-def _created_instances(triples: set) -> list[IRI]:
+def _created_instances(triples: set) -> list[SubjectLike]:
     """The instances that a create writes about: the new instance and each nested instance its
     data gives with properties. A link writes only a triple whose subject is one of them.
     """
@@ -91,15 +96,15 @@ class OGM:
     def __init__(
         self,
         *,
-        db: GraphDB,
+        db: TripleStore,
         loader: Optional[LoaderStrategy] = None,
         logger: Optional[logging.Logger] = None,
-        naming_schema: Optional[Callable[[], str]] = None,
+        naming_schema: Optional[Callable[[IRI], IRI]] = None,
         skolem_namespace: str = DEFAULT_SKOLEM_NAMESPACE,
     ):
         """
         Args:
-            db: GraphDB interface
+            db: The triple store, as the triple store interface's `connect()` returns it.
 
             loader: LoaderStrategy that takes an IRI and returns property chains for selective instance loading. if not specified, property chains need to be provided at fetch/creation time.
 
@@ -186,7 +191,12 @@ class OGM:
         Returns:
             Node representing the newly created instance
         Raises:
-            ValueError: If the data does not fit the class.
+            OGMDataError: If the data does not fit the class. Refused.
+            OGMOntologyError: If the ontology has a shape that the OGM cannot map. Repair.
+            OGMUsageError: If the call is malformed, for example data that is not a dictionary
+                of lists. Fix the call.
+            pydantic.ValidationError: If the data does not fit the generated model. It
+                propagates unchanged.
             kapps_triplestore_interface.exceptions.PreconditionFailedError: If an instance it
                 would create already exists: the target graph holds an explicit triple whose
                 subject is the new instance or a nested instance that the data gives with
@@ -282,7 +292,7 @@ class OGM:
 
     def _assign_id(self, node: Node) -> None:
         if node.class_spec is None:
-            raise ValueError(f"Node {node} has no ClassSpec, cannot assign id.")
+            raise OGMUsageError(f"Node {node} has no ClassSpec, cannot assign id.")
         model_iri = getattr(node.class_spec, "iri", None)
         if model_iri:
             instance_id = self.db.new_iri(base=model_iri, schema=self.naming_schema)
@@ -326,15 +336,18 @@ class OGM:
         Groups come back ordered by identifier so that two fetches of unchanged data align
         positionally, which is what ``reconcile_anonymous_addresses`` relies on.
         """
-        # Re-query anonymous node, this time including properties
-        query = f"""
-                SELECT ?bnode ?property ?value
-                FROM <http://www.ontotext.com/explicit>
-                WHERE {{
-                    <{instance_iri}> <{property_iri}> ?bnode .
-                    ?bnode ?property ?value .
-                }}
-            """
+        # Re-query anonymous node, this time including properties. Explicit statements only: the
+        # store infers more about the node (the inverse of the property back to the instance, the
+        # types its class implies), and those are not the node's own data. A write could not
+        # remove them either.
+        query = SPARQLQuery.select(
+            variables=["?bnode", "?property", "?value"],
+            where_clauses=[
+                f"<{instance_iri}> <{property_iri}> ?bnode .",
+                "?bnode ?property ?value .",
+            ],
+            include_implicit=False,
+        )
         query_result = (
             self.db.query(query, convert_bindings=True)
             .get("results", {})
@@ -418,13 +431,21 @@ class OGM:
         Raises:
             AnonymousNodeFetchError: If instance_iri is a Skolem IRI. Such a node is anonymous:
                 nothing is asserted about it, so it has no rdf:type to resolve a ClassSpec from,
-                and it is only meaningful as part of the entity that carries it.
+                and it is only meaningful as part of the entity that carries it. It is an
+                OGMNotFoundError.
+            OGMNotFoundError: If the store holds no class for the instance. Refresh.
+            OGMDataError: If ``class_scope`` names a property that the class does not have, or
+                continues a property chain past a property with a literal range. Refused.
+            OGMOntologyError: If the ontology has a shape that the OGM cannot map. Repair.
+            kapps_triplestore_interface.exceptions.TripleStoreInterfaceError: If the triple
+                store interface or the store refuses a read. It propagates unchanged.
         """
         if is_skolem_iri(instance_iri):
             raise AnonymousNodeFetchError(
                 f"{instance_iri} is an anonymous node — fetch its parent instead. "
                 "Anonymous nodes carry no rdf:type and are only reachable through the "
-                "property that points at them."
+                "property that points at them.",
+                iri=instance_iri,
             )
 
         if class_scope is None and self.loader is not None:
@@ -433,10 +454,12 @@ class OGM:
         if class_spec is None:
             class_iri_set = self.db.owl_get_classes_of_individual(instance_iri)
             if not class_iri_set:
-                raise ValueError(
-                    f"Could not determine class IRI for instance {instance_iri}"
+                raise OGMNotFoundError(
+                    f"Could not determine class IRI for instance {instance_iri}",
+                    iri=instance_iri,
                 )
-            class_iri = class_iri_set.pop()
+            # The store gives IRIs: only a call with `local_name=True` gives strings.
+            class_iri = cast(IRI, class_iri_set.pop())
             if class_iri_set:
                 self.logger.warning(
                     "Instance %s has multiple classes, using %s and not %s.",
@@ -547,6 +570,9 @@ class OGM:
         inferred passes the check, and stays visible after the commit, because a delete clears
         only the explicit triple. See "What create and commit promise" in the README.
 
+        The OGM's own errors below are raised before anything is written, and each of them is a
+        ``ValueError``.
+
         Args:
             instance_iri: IRI of the instance to update
             data: Data dictionary for the instance (must conform to the class)
@@ -557,13 +583,18 @@ class OGM:
             Node representing the newly updated instance. With ``changes``, a list with one
             Node for each change, in the same order.
         Raises:
-            TypeError: If both forms or neither are given, or ``changes`` holds an entry that
-                is not a ``Create`` or an ``Update``.
-            ValueError: If the store holds no class for an instance to update, or the data does
-                not fit the class. AmbiguousNodeAlignmentError and UnresolvableNodeAddressError
-                are subclasses. With ``changes``, also if two changes write the same instance:
-                the instance a change names, or a named instance that its data nests with
-                properties. Types do not count. Nothing is written in any of these cases.
+            OGMUsageTypeError: If both forms or neither are given, or ``changes`` holds an
+                entry that is not a ``Create`` or an ``Update``. It is a ``TypeError``. Fix the
+                call.
+            OGMUsageError: With ``changes``, if two changes write the same instance: the
+                instance a change names, or a named instance that its data nests with
+                properties. Types do not count. Fix the call.
+            OGMNotFoundError: If the store holds no class for an instance to update. Refresh.
+                AmbiguousNodeAlignmentError and UnresolvableNodeAddressError are subclasses.
+            OGMDataError: If the data does not fit the class. Refused.
+            OGMOntologyError: If the ontology has a shape that the OGM cannot map. Repair.
+            pydantic.ValidationError: If the data does not fit the generated model. It
+                propagates unchanged.
             kapps_triplestore_interface.exceptions.PreconditionFailedError: If a triple it
                 would remove is not an explicit triple of the target graph. That is the case
                 for a value that the store only infers, for a value that another writer changed
@@ -581,13 +612,15 @@ class OGM:
         """
         if changes is None:
             if instance_iri is None or data is None:
-                raise TypeError("commit() takes instance_iri and data, or changes")
+                raise OGMUsageTypeError(
+                    "commit() takes instance_iri and data, or changes"
+                )
             return self._commit(
                 [Update(instance_iri=instance_iri, data=data)], named_graph
             )[0]
 
         if instance_iri is not None or data is not None:
-            raise TypeError(
+            raise OGMUsageTypeError(
                 "commit() takes instance_iri and data, or changes, but not both"
             )
         return self._commit(list(changes), named_graph)
@@ -604,14 +637,14 @@ class OGM:
         named: set[IRI] = set()
         for change in changes:
             if not isinstance(change, (Create, Update)):
-                raise TypeError(
+                raise OGMUsageTypeError(
                     f"commit() takes Create and Update changes, got {type(change).__name__}"
                 )
             if change.instance_iri is None:
                 continue
             iri = IRI(change.instance_iri)
             if iri in named:
-                raise ValueError(
+                raise OGMUsageError(
                     f"Two changes name {iri}. Put all changes to one instance in one change."
                 )
             named.add(iri)
@@ -619,7 +652,7 @@ class OGM:
         nodes: list[Node] = []
         old_triples: set = set()
         new_triples: set = set()
-        created: set[IRI] = set()
+        created: set[SubjectLike] = set()
         writers: dict[IRI, int] = {}
         for index, change in enumerate(changes):
             if isinstance(change, Create):
@@ -651,7 +684,7 @@ class OGM:
             for instance in _described_instances(removed | added):
                 first = writers.setdefault(instance, index)
                 if first != index:
-                    raise ValueError(
+                    raise OGMUsageError(
                         f"Two changes write {instance} (positions {first} and {index}). "
                         "Put all changes to one instance in one change."
                     )
@@ -687,10 +720,12 @@ class OGM:
 
         class_iri_set = self.db.owl_get_classes_of_individual(instance_iri)
         if not class_iri_set:
-            raise ValueError(
-                f"Could not determine class IRI for instance {instance_iri}"
+            raise OGMNotFoundError(
+                f"Could not determine class IRI for instance {instance_iri}",
+                iri=instance_iri,
             )
-        class_iri = class_iri_set.pop()
+        # The store gives IRIs: only a call with `local_name=True` gives strings.
+        class_iri = cast(IRI, class_iri_set.pop())
         if class_iri_set:
             self.logger.warning(
                 "Instance %s has multiple classes, using %s and not %s.",

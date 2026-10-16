@@ -6,20 +6,63 @@ from dataclasses import dataclass, field, asdict
 import logging
 import pydantic as pd
 
-from pydantic import ConfigDict  # Pydantic v2
 
 
-from kapps_triplestore_interface import IRI
+from kapps_triplestore_interface import IRI, SPARQLQuery
 from kapps_ogm.utils.pretty_print import format_class_spec
 from kapps_ogm.mapping.anonymous_model import AnonymousNodeModel
-from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
+from kapps_ogm.mapping.property_spec import (
+    PropertySpec,
+    PropertyValueKind,
+    _tighten_bound,
+)
 from kapps_ogm.utils.class_scope import ClassScope
+from kapps_ogm.utils.errors import (
+    OGMDataError,
+    OGMOntologyError,
+    OGMUsageError,
+    _one_or_none,
+)
 
 if TYPE_CHECKING:
     from kapps_ogm.ogm import OGM
 
 logger = logging.getLogger("kapps_cspec")
 logger.setLevel(logging.INFO)
+
+
+# The ways a property reaches ``?class``, one SPARQL group pattern each. A property belongs to a
+# class when one of them matches for the class or one of its superclasses.
+_PROPERTY_BRANCHES = (
+    # The property's domain is the class.
+    "?property <http://www.w3.org/2000/01/rdf-schema#domain> ?class .",
+    # The property's domain is a union that has the class as a member.
+    "?property <http://www.w3.org/2000/01/rdf-schema#domain> ?union_class . "
+    "?union_class <http://www.w3.org/2002/07/owl#unionOf> ?list . "
+    "?list <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/"
+    "<http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?class .",
+)
+
+
+def _property_discovery_query(class_iri: IRI) -> SPARQLQuery:
+    """The properties of ``class_iri``: every property that a branch above gives the class or one
+    of its superclasses.
+
+    The query reads explicit statements only, so that a class gets the properties the ontology
+    asserts for it. On `rdfsplus-optimized` the inferred statements change nothing here: the
+    inferred superclasses are the closure that the query walks itself. A ruleset that infers more
+    could add domains or superclasses. The interface writes that scope in the form its store
+    understands.
+    """
+    branches = "\nUNION\n".join(f"{{ {branch} }}" for branch in _PROPERTY_BRANCHES)
+    return SPARQLQuery.select(
+        variables=["?property"],
+        where_clauses=[
+            branches,
+            f"<{class_iri}> <http://www.w3.org/2000/01/rdf-schema#subClassOf>* ?class .",
+        ],
+        include_implicit=False,
+    )
 
 
 class ClassHydrationLevel(Enum):
@@ -55,7 +98,7 @@ class ClassSpec:
         Returns self
         """
         if not self.iri:
-            raise ValueError("Cannot hydrate ClassSpec without an IRI.")
+            raise OGMUsageError("Cannot hydrate ClassSpec without an IRI.")
 
         hydrated_spec = ClassSpec.specify(
             self.iri,
@@ -95,7 +138,7 @@ class ClassSpec:
         # Build the Pydantic model
         model_name = (
             self.iri.lined if self.iri else "AnonymousClass"
-        )  # TODO: use graphdbs blanknode generator?
+        )  # TODO: use the store's blank node generator?
 
         # An anonymous class has no id field, so its node's address has nowhere to live in the
         # projection. AnonymousNodeModel carries it out of band instead. An explicitly configured
@@ -110,15 +153,11 @@ class ClassSpec:
             **fields,
         )  # type: ignore[call-overload] #TODO: is baseModel correct base here?
 
-        # Enforce no unknown properties at model level (replaces Node._validate_data unknown-check)
-        if ConfigDict is not None:
-            model_cls.model_config = ConfigDict(extra="forbid")
-        else:
-
-            class Config(getattr(self.pydantic_base_model, "Config", object)):
-                extra = "forbid"
-
-            model_cls.Config = Config
+        # Unknown properties are ignored by design: the model keeps pydantic's default
+        # (extra="ignore"). Under the open world a graph may carry more than any schema declares
+        # (a comment, the connection metadata of a parameter node), so rejecting unknown keys
+        # would break every fetch of real data. A closed-world validator belongs to SHACL support.
+        # Do not set extra="forbid" here; setting it after create_model has no effect anyway.
 
         # Keep mapping to IRIs for reference
         setattr(
@@ -130,6 +169,49 @@ class ClassSpec:
 
         return model_cls
 
+    @staticmethod
+    def _maximum_counts(class_iri: IRI, ogm: "OGM") -> Dict[IRI, int]:
+        """The maximum count of each property that ``class_iri`` or one of its superclasses
+        bounds with a restriction under ``rdfs:subClassOf``. Where several restrictions bound a
+        property, the tightest wins.
+
+        The query walks ``rdfs:subClassOf*`` from the class to the anonymous restrictions and
+        reads ``owl:cardinality``, ``owl:maxCardinality``, ``owl:qualifiedCardinality`` and
+        ``owl:maxQualifiedCardinality``. It does not check the qualifier, ``owl:onClass`` or
+        ``owl:onDataRange``: the bound counts every value of the property. It reads explicit
+        statements only, as the property discovery does.
+        """
+        owl = "http://www.w3.org/2002/07/owl#"
+        bounds = "\nUNION\n".join(
+            f"{{ ?restriction <{owl}{keyword}> ?bound . }}"
+            for keyword in (
+                "cardinality",
+                "maxCardinality",
+                "qualifiedCardinality",
+                "maxQualifiedCardinality",
+            )
+        )
+        query = SPARQLQuery.select(
+            variables=["?property", "?bound"],
+            where_clauses=[
+                f"<{class_iri}> <http://www.w3.org/2000/01/rdf-schema#subClassOf>* ?restriction .",
+                "FILTER(isBlank(?restriction))",
+                f"?restriction <{owl}onProperty> ?property .",
+                bounds,
+            ],
+            include_implicit=False,
+        )
+        bindings = (
+            ogm.db.query(query, convert_bindings=True)
+            .get("results", {})
+            .get("bindings", [])
+        )
+        maximum_counts: Dict[IRI, int] = {}
+        for binding in bindings:
+            prop, bound = binding["property"], int(binding["bound"])
+            maximum_counts[prop] = min(bound, maximum_counts.get(prop, bound))
+        return maximum_counts
+
     @classmethod
     def specify_from_instance(
         cls,
@@ -139,16 +221,16 @@ class ClassSpec:
         hydration_level: ClassHydrationLevel,
     ) -> ClassSpec:
         """
-        create a ClassSpec for the given Pydantic model by analyzing its RDF data in the GraphDB via the OGM instance.
+        create a ClassSpec for the given Pydantic model by analyzing its RDF data in the triple store via the OGM instance.
 
             Args:
                 model_cls: The Pydantic model class to specify
-                ogm: The OGM instance with access to the GraphDB
+                ogm: The OGM instance with access to the triple store
             Returns:
                 A ClassSpec instance representing the class specification"""
         iri = getattr(model_cls, "_iri_model_name", None)
         if iri is None:
-            raise ValueError(f"Model {model_cls.__name__} has no associated IRI.")
+            raise OGMUsageError(f"Model {model_cls.__name__} has no associated IRI.")
 
         return cls.specify(
             class_iri=iri,
@@ -163,17 +245,30 @@ class ClassSpec:
         ogm: "OGM",
         hydration_level: ClassHydrationLevel,
         class_scope: Optional[ClassScope] = None,
+        *,
+        _path: tuple[IRI, ...] = (),
     ) -> ClassSpec:
         """
-        create a ClassSpec for the given IRI by analyzing the ClassScope, its RDF data in the GraphDB via the OGM instance.
+        create a ClassSpec for the given IRI by analyzing the ClassScope, its RDF data in the triple store via the OGM instance.
 
-            Args:
-                iri: The IRI of the class to specify
-                ogm: The OGM instance with access to the GraphDB
-                class_scope: The ClassScope defining the class and property structure
-                hydration_level: Whether to include all immediate properties or not
-            Returns:
-                A ClassSpec instance representing the class specification"""
+        At the FULL level an object property nests the FULL specification of its range class. A
+        range class that is already on the specification path, the classes being specified from
+        the root to this one, is nested as an IRI-only link instead: a ClassSpec with the class's
+        IRI and no properties, which every reader takes as a link. So a class that its
+        properties lead back to gives a finite specification, and a class on two paths without a
+        cycle is specified in full on both. The properties are visited in sorted order, so the
+        specification is the same in every run. A class scope is followed as it is given.
+
+        Args:
+            iri: The IRI of the class to specify
+            ogm: The OGM instance with access to the triple store
+            class_scope: The ClassScope defining the class and property structure
+            hydration_level: Whether to include all immediate properties or not
+            _path: The classes being specified above this one, from the root. Internal to
+                the recursion.
+
+        Returns:
+            A ClassSpec instance representing the class specification"""
         db = ogm.db
 
         ### Collect special properties
@@ -181,9 +276,13 @@ class ClassSpec:
         triples = db.triples_get(sub=class_iri, pred="rdf:type", include_implicit=True)
         class_types = [triple[2] for triple in triples]
         if not class_types:
-            raise ValueError(f"Class {class_iri} has no rdf:type defined.")
+            raise OGMOntologyError(
+                f"Class {class_iri} has no rdf:type defined.", class_iri=class_iri
+            )
         if IRI("owl:Class") not in class_types and IRI("rdfs:Class") not in class_types:
-            raise ValueError(f"IRI {class_iri} is not an OWL/RDFS Class.")
+            raise OGMOntologyError(
+                f"IRI {class_iri} is not an OWL/RDFS Class.", class_iri=class_iri
+            )
 
         class_spec = cls(
             iri=class_iri,
@@ -231,30 +330,13 @@ class ClassSpec:
 
         ### Build property specs of the class
         if hydration_level is ClassHydrationLevel.SCOPE and class_scope is None:
-            raise ValueError(
+            raise OGMUsageError(
                 "ClassScope must be provided when hydration_level is 'SCOPE'."
             )
 
-        query = f"""
-            PREFIX onto: <http://www.ontotext.com/>
-            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-
-            SELECT ?property
-            FROM onto:explicit
-            WHERE {{
-                {{
-                    ?property rdfs:domain ?class .
-                }}
-                UNION
-                {{
-                    ?property rdfs:domain ?union_class .
-                    ?union_class owl:unionOf ?list .
-                    ?list rdf:rest*/rdf:first ?class .
-                }} .
-                <{class_iri}> rdfs:subClassOf* ?class.
-            }}
-        """
-        query_result = db.query(query, convert_bindings=True)
+        query_result = db.query(
+            _property_discovery_query(class_iri), convert_bindings=True
+        )
         property_list = [
             b["property"] for b in query_result.get("results", {}).get("bindings", [])
         ]
@@ -268,18 +350,26 @@ class ClassSpec:
             expected_properties = set(class_scope.keys())
             missing_properties = expected_properties - properties
             if missing_properties:
-                raise ValueError(
-                    f"Properties {missing_properties} specified in class scope, but not found as property of class {class_spec.iri}."
+                raise OGMDataError(
+                    f"Properties {missing_properties} specified in class scope, but not found as property of class {class_spec.iri}.",
+                    property_iri=_one_or_none(missing_properties),
+                    class_iri=class_iri,
                 )
             properties = expected_properties
 
-        for prop in properties:
+        maximum_counts = cls._maximum_counts(class_iri, ogm)
+        path = _path + (class_iri,)
+        for prop in sorted(properties):
             nested_scope = class_scope.get(prop, None) if class_scope else None
             class_spec.properties[prop] = PropertySpec.specify(
                 prop_iri=prop,
                 nested_scope=nested_scope,
                 ogm=ogm,
                 hydration_level=hydration_level,
+                _path=path,
+            )
+            class_spec.properties[prop].max_count = _tighten_bound(
+                class_spec.properties[prop].max_count, maximum_counts.get(prop), min
             )
 
         return class_spec

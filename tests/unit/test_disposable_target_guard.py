@@ -2,7 +2,7 @@
 
 These tests reach no triple store: they exercise the decision, not the wipe, so they run in
 every tier including `-m "not live"`. That is deliberate. The guard is the whole distance
-between `tests/conftest.py`'s session fixture and whatever `GRAPHDB_URL` happens to name, and a
+between `tests/conftest.py`'s session fixture and whatever `TRIPLESTORE_URL` happens to name, and a
 guard nobody exercises is a guard that quietly stops working.
 
 `conftest` imports as a top-level module because `tests/` carries no `__init__.py`, so pytest

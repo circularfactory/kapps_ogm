@@ -13,6 +13,7 @@ from kapps_ogm.utils.constants import (
     PROPERTY_CHARACTERISTICS,
 )
 from kapps_ogm.utils.class_scope import ClassScope
+from kapps_ogm.utils.errors import OGMDataError, OGMOntologyError, OGMUsageError
 
 if TYPE_CHECKING:
     from kapps_ogm.mapping.class_spec import ClassSpec, ClassHydrationLevel
@@ -31,7 +32,7 @@ class PropertyValueKind(Enum):
 def chain_ranges(prop_iri: IRI, range_var: str, ancestor_var: str = "?ancestor") -> str:
     """The SPARQL prelude binding `range_var` to every rdfs:range along a property's chain.
 
-    RDFS entails no rdfs:range triple for a subproperty and GraphDB materializes none, so
+    RDFS entails no rdfs:range triple for a subproperty and the store materializes none, so
     every query that needs a property's effective shape has to walk the chain itself. The
     `*` path is a transitive closure, which is what makes a cyclic rdfs:subPropertyOf
     assertion terminate rather than recurse. Shared so the four call sites cannot drift.
@@ -151,10 +152,14 @@ class PropertySpec:
         minimum. `owl:someValuesFrom`, `owl:minCardinality` and `owl:cardinality` never make
         the field required and never give it a minimum length. See `required`.
 
-        Every field is a list, and a property without a value gives `[]`. A single-valued
-        property, whose maximum is one from `owl:FunctionalProperty`, `owl:cardinality 1` or
-        `owl:maxCardinality 1`, gives a list of at most one. So the shape of the data never
-        depends on a cardinality declaration. A second value is refused, and the error names
+        Every field is a list, and a property without a value gives `[]`. The maximum comes from
+        `owl:FunctionalProperty`, from an `rdfs:range` restriction with `owl:cardinality` or
+        `owl:maxCardinality`, and from a restriction of the class or of a superclass under
+        `rdfs:subClassOf` with `owl:cardinality`, `owl:maxCardinality`,
+        `owl:qualifiedCardinality` or `owl:maxQualifiedCardinality`, which
+        `ClassSpec.specify` sets. The tightest of them wins. A single-valued property, whose
+        maximum is one, gives a list of at most one. So the shape of the data never depends on
+        a cardinality declaration. A value over the maximum is refused, and the error names
         the maximum.
         """
         from .class_spec import ClassHydrationLevel
@@ -173,8 +178,9 @@ class PropertySpec:
                 # If all_from is set, use it as type restriction
                 if self.all_from:
                     if isinstance(self.all_from, IRI):
-                        raise ValueError(
-                            f"Literal property {self.iri} cannot have allValuesFrom as Object IRI"
+                        raise OGMOntologyError(
+                            f"Literal property {self.iri} cannot have allValuesFrom as Object IRI",
+                            property_iri=self.iri,
                         )
                     base_type = self.all_from
                 else:
@@ -202,7 +208,7 @@ class PropertySpec:
                             from kapps_ogm.node.core import (
                                 Node,
                             )  # Lazy import to avoid cycles
-                        except Exception:
+                        except ImportError:
                             Node = None
 
                         if Node is not None and isinstance(value, Node):
@@ -241,7 +247,7 @@ class PropertySpec:
                             from kapps_ogm.node.core import (
                                 Node,
                             )  # Lazy import to avoid cycles
-                        except Exception:
+                        except ImportError:
                             Node = None
 
                         if Node is not None and isinstance(value, Node):
@@ -266,7 +272,8 @@ class PropertySpec:
         field_type = conlist(base_type, max_length=self.max_count)
         default = ... if self.required else []
 
-        # Apply some_from / all_from validators using Annotated types
+        # Apply some_from / all_from validators using Annotated types. pydantic runs them, and it
+        # turns their OGMDataError into a pydantic.ValidationError with the same text.
         if self.some_from or self.all_from:
 
             def validate_some_all(v):
@@ -279,14 +286,18 @@ class PropertySpec:
                     if not any(
                         _satisfies_constraint(x, self.some_from) for x in values
                     ):
-                        raise ValueError(
-                            f"Property {self.iri} requires at least one value of type {self.some_from}"
+                        raise OGMDataError(
+                            f"Property {self.iri} requires at least one value of type {self.some_from}",
+                            property_iri=self.iri,
+                            value=v,
                         )
 
                 if self.all_from is not None:
                     if not all(_satisfies_constraint(x, self.all_from) for x in values):
-                        raise ValueError(
-                            f"Property {self.iri} requires all values to be of type {self.all_from}"
+                        raise OGMDataError(
+                            f"Property {self.iri} requires all values to be of type {self.all_from}",
+                            property_iri=self.iri,
+                            value=v,
                         )
 
                 return v
@@ -364,7 +375,7 @@ class PropertySpec:
         messages so a failure names the property whose range is malformed.
         """
         if self.iri != other.iri:
-            raise ValueError(
+            raise OGMUsageError(
                 f"Cannot merge PropertySpecs with different IRIs: {self.iri} vs {other.iri}"
             )
 
@@ -379,18 +390,20 @@ class PropertySpec:
             and their_target is not None
             and isinstance(mine_target, IRI) != isinstance(their_target, IRI)
         ):
-            raise ValueError(
+            raise OGMOntologyError(
                 f"Property {self.iri} is constrained to both a datatype and a class by two "
                 f"rdfs:range restrictions of {owner_iri}: "
-                f"{_target_label(mine_target)} and {_target_label(their_target)}"
+                f"{_target_label(mine_target)} and {_target_label(their_target)}",
+                property_iri=self.iri,
             )
 
         def reconcile_type(owl_term: str, mine: Any, theirs: Any) -> Any:
             """One side's constraint, or the shared one; two different ones are an ontology error."""
             if mine is not None and theirs is not None and mine != theirs:
-                raise ValueError(
+                raise OGMOntologyError(
                     f"Property {self.iri} is constrained to incompatible {owl_term} by two "
-                    f"rdfs:range restrictions of {owner_iri}: {mine} and {theirs}"
+                    f"rdfs:range restrictions of {owner_iri}: {mine} and {theirs}",
+                    property_iri=self.iri,
                 )
             return mine if mine is not None else theirs
 
@@ -411,9 +424,10 @@ class PropertySpec:
             and merged_max_count is not None
             and merged_min_count > merged_max_count
         ):
-            raise ValueError(
+            raise OGMOntologyError(
                 f"Property {self.iri} is unsatisfiable after merging the rdfs:range restrictions "
-                f"of {owner_iri}: minimum cardinality {merged_min_count} exceeds maximum cardinality {merged_max_count}"
+                f"of {owner_iri}: minimum cardinality {merged_min_count} exceeds maximum cardinality {merged_max_count}",
+                property_iri=self.iri,
             )
 
         # A cardinality-only restriction carries no type information, so it must not
@@ -444,7 +458,11 @@ class PropertySpec:
         nested_scope: Optional["ClassScope"],
         ogm: "OGM",
         hydration_level: "ClassHydrationLevel",
+        *,
+        _path: tuple[IRI, ...] = (),
     ) -> PropertySpec:
+        """The specification of ``prop_iri``. ``_path`` holds the classes being specified above
+        it, from the root, as in ``ClassSpec.specify``."""
         # Categorize the property regarding its type and characteristics
         type_query_result = ogm.db.triples_get(
             sub=prop_iri, pred="rdf:type", include_implicit=True
@@ -452,7 +470,9 @@ class PropertySpec:
         property_types = [triple[2] for triple in type_query_result]
 
         if not property_types:
-            raise ValueError(f"Property {prop_iri} has no rdf:type defined.")
+            raise OGMOntologyError(
+                f"Property {prop_iri} has no rdf:type defined.", property_iri=prop_iri
+            )
 
         base_types = []
         characteristics = []
@@ -470,13 +490,16 @@ class PropertySpec:
         named_ranges = range_set - anonymous_ranges
 
         if not range_set:
-            raise ValueError(f"Property {prop_iri} has no rdfs:range defined.")
+            raise OGMOntologyError(
+                f"Property {prop_iri} has no rdfs:range defined.", property_iri=prop_iri
+            )
 
         if anonymous_ranges and named_ranges:
-            raise ValueError(
+            raise OGMOntologyError(
                 f"Property {prop_iri} resolves both a named rdfs:range and an anonymous "
                 f"restriction range, which cannot be merged: named {sorted(str(r) for r in named_ranges)}, "
-                f"{len(anonymous_ranges)} anonymous restriction(s)"
+                f"{len(anonymous_ranges)} anonymous restriction(s)",
+                property_iri=prop_iri,
             )
 
         if anonymous_ranges:
@@ -512,19 +535,24 @@ class PropertySpec:
                     ogm=ogm,
                 )
             else:
-                raise ValueError(
-                    f"Unknown property_type: {sorted(str(r) for r in anonymous_ranges)} for property {prop_iri}"
+                raise OGMOntologyError(
+                    f"Unknown property_type: {sorted(str(r) for r in anonymous_ranges)} for property {prop_iri}",
+                    property_iri=prop_iri,
                 )
         elif len(named_ranges) > 1:
-            raise ValueError(
-                f"Property {prop_iri} has multiple independent rdfs:range defined, this is not supported: {named_ranges}"
+            raise OGMOntologyError(
+                f"Property {prop_iri} has multiple independent rdfs:range defined, this is not supported: {named_ranges}",
+                property_iri=prop_iri,
             )
         else:
             prop_range = named_ranges.pop()
             if isinstance(prop_range, type):
                 if nested_scope:
-                    raise ValueError(
-                        f"Property {prop_iri} cannot be part of a property chain as it has a literal range {prop_range}"
+                    # The class whose scope names this property is the last one on the path.
+                    raise OGMDataError(
+                        f"Property {prop_iri} cannot be part of a property chain as it has a literal range {prop_range}",
+                        property_iri=prop_iri,
+                        class_iri=_path[-1] if _path else None,
                     )
                 property_spec = cls._specify_literal_property(
                     prop_iri=prop_iri,
@@ -537,10 +565,12 @@ class PropertySpec:
                     nested_scope=nested_scope,
                     ogm=ogm,
                     hydration_level=hydration_level,
+                    path=_path,
                 )
             else:
-                raise ValueError(
-                    f"Unknown property_type: {prop_range} for property {prop_iri}"
+                raise OGMOntologyError(
+                    f"Unknown property_type: {prop_range} for property {prop_iri}",
+                    property_iri=prop_iri,
                 )
 
         # Apply characteristics to the property_spec
@@ -573,15 +603,28 @@ class PropertySpec:
         nested_scope: Optional["ClassScope"],
         ogm: "OGM",
         hydration_level: "ClassHydrationLevel",
+        path: tuple[IRI, ...],
     ) -> PropertySpec:
-        from .class_spec import ClassSpec
+        from .class_spec import ClassSpec, ClassHydrationLevel
 
-        nested_class_spec = ClassSpec.specify(
-            ogm=ogm,
-            class_iri=range_iri,
-            class_scope=nested_scope,
-            hydration_level=hydration_level,
-        )
+        if hydration_level is ClassHydrationLevel.FULL and range_iri in path:
+            # The range class is being specified on this path already, so specifying it again
+            # would never end. It is nested as an IRI-only link: its IRI and no properties. Every
+            # reader takes a nested class without properties as a link, as it takes the one that
+            # a class scope gives a property it names without a nested scope (which also carries
+            # the class's types and label). REFERENCE is not used: its IRI field takes a fetched
+            # or given link as a dict, which the write path then writes as a literal.
+            nested_class_spec = ClassSpec(
+                iri=range_iri, hydration_level=ClassHydrationLevel.SCOPE
+            )
+        else:
+            nested_class_spec = ClassSpec.specify(
+                ogm=ogm,
+                class_iri=range_iri,
+                class_scope=nested_scope,
+                hydration_level=hydration_level,
+                _path=path,
+            )
 
         property_spec = cls(
             iri=prop_iri,
@@ -609,9 +652,10 @@ class PropertySpec:
 
         python_type = XSDToPythonTypes.get(target)
         if python_type is None:
-            raise ValueError(
+            raise OGMOntologyError(
                 f"Property {nested_property}, restricted by the rdfs:range of {owner_iri}, "
-                f"has datatype target {target}, which kapps_ogm cannot map to a python type"
+                f"has datatype target {target}, which kapps_ogm cannot map to a python type",
+                property_iri=nested_property,
             )
         return python_type
 
@@ -781,7 +825,7 @@ class PropertySpec:
         # Iterate all of query 2's bindings; first one seen wins
         for binding in metadata_bindings:
             if "unionList" in binding:
-                # Note: resolve_rdf_list method would need to be implemented in GraphDB
+                # Note: resolve_rdf_list method would need to be implemented in the triple store interface
                 if "unionOf" not in property_spec.nested.metadata:
                     property_spec.nested.metadata["unionOf"] = binding["unionList"][
                         "value"
@@ -794,7 +838,7 @@ class PropertySpec:
                     ]["value"]
 
             if "oneOfList" in binding:
-                # Note: resolve_rdf_list method would need to be implemented in GraphDB
+                # Note: resolve_rdf_list method would need to be implemented in the triple store interface
                 if "oneOf" not in property_spec.nested.metadata:
                     property_spec.nested.metadata["oneOf"] = binding["oneOfList"][
                         "value"

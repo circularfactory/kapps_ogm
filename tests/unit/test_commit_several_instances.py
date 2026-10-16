@@ -19,7 +19,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from kapps_triplestore_interface import GraphDB, IRI
+from kapps_triplestore_interface import IRI, TripleStore
 from kapps_triplestore_interface.exceptions import (
     PreconditionFailedError,
     TripleStoreInterfaceError,
@@ -30,15 +30,17 @@ from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.class_scope import ClassScope
 
+from conftest import ONE_WORKPIECE_PER_RESOURCE, load_shape, remove_shapes
+
 NS = "https://example.org/several#"
 WORKPIECE = IRI(NS + "Workpiece")
 RESOURCE = IRI(NS + "Resource")
 POSSESSION_STATE = IRI(NS + "PossessionState")
 HAS_POSSESSED_WORKPIECE = IRI(NS + "hasPossessedWorkpiece")
 HAS_POSSESSOR = IRI(NS + "hasPossessor")
+IS_POSSESSION_STATE_OF = IRI(NS + "isPossessionStateOf")
 
 RDF_TYPE = IRI("rdf:type")
-SHAPES_GRAPH = IRI("http://rdf4j.org/schema/rdf4j#SHACLShapeGraph")
 
 
 def fresh(name: str) -> IRI:
@@ -62,7 +64,7 @@ def state_spec() -> ClassSpec:
 
 @pytest.fixture
 def store() -> Mock:
-    db = Mock(spec=GraphDB)
+    db = Mock(spec=TripleStore)
     db.iri_exists.return_value = False
     return db
 
@@ -210,37 +212,24 @@ ONTOLOGY = [
     (HAS_POSSESSOR, IRI("rdfs:range"), POSSESSION_STATE),
 ]
 
-# A resource possesses at most one workpiece. Its target is this file's own class, so it cannot
-# refuse a write of any other test.
-ONE_WORKPIECE_PER_RESOURCE = f"""
-    PREFIX sh: <http://www.w3.org/ns/shacl#>
-    INSERT DATA {{
-        GRAPH <{SHAPES_GRAPH}> {{
-            <{NS}ResourceShape> a sh:NodeShape ;
-                sh:targetClass <{RESOURCE}> ;
-                sh:property [ sh:path <{HAS_POSSESSOR}> ; sh:maxCount 1 ] .
-        }}
-    }}
-"""
-
 
 @pytest.fixture
-def live_ogm(db: GraphDB) -> OGM:
+def live_ogm(db: TripleStore) -> OGM:
     db.triples_add(ONTOLOGY, check_exist=False)
     return OGM(db=db)
 
 
 @pytest.fixture
-def one_workpiece_per_resource(db: GraphDB):
-    """The shape above, loaded for one test. ``CLEAR GRAPH`` removes it with every other shape.
-    SPARQL cannot match the shapes graph, and ``DELETE DATA`` cannot name the blank node of
-    ``sh:property [ ... ]``, so no narrower removal reaches this shape."""
-    db.query(ONE_WORKPIECE_PER_RESOURCE, update=True)
+def one_workpiece_per_resource(db: TripleStore):
+    """The suite's shape, loaded for one test: a resource possesses at most one workpiece. The
+    load replaces every other shape of the dataset, and the removal after the test removes all.
+    """
+    load_shape(db, ONE_WORKPIECE_PER_RESOURCE)
     yield
-    db.query(f"CLEAR GRAPH <{SHAPES_GRAPH}>", update=True)
+    remove_shapes(db)
 
 
-def possess(db: GraphDB, resource: IRI, workpiece: IRI) -> IRI:
+def possess(db: TripleStore, resource: IRI, workpiece: IRI) -> IRI:
     """Seed ``resource`` as the possessor of ``workpiece``, directly, and return the state."""
     state = fresh("state")
     db.triples_add(
@@ -255,7 +244,7 @@ def possess(db: GraphDB, resource: IRI, workpiece: IRI) -> IRI:
     return state
 
 
-def explicit(db: GraphDB, subject: IRI, predicate: IRI) -> set:
+def explicit(db: TripleStore, subject: IRI, predicate: IRI) -> set:
     return {
         triple[2]
         for triple in db.triples_get(
@@ -383,11 +372,25 @@ class TestARefusedChangeOfPossession:
 
 class TestTheExistenceCheckOnAStore:
     """A ``Create`` is refused only for an IRI with explicit statements. An IRI that is only the
-    object of a statement has inferred statements, from an ``rdfs:range``, and is still new. The
-    store checks it inside the write.
+    object of a statement can have inferred statements, here from an ``owl:inverseOf``, and is
+    still new. The store checks it inside the write.
     """
 
-    def test_an_iri_with_only_inferred_statements_is_created(self, db, live_ogm):
+    @pytest.fixture
+    def inverse_of_possessed_workpiece(self, db):
+        """An inverse of ``hasPossessedWorkpiece``, for one test. ``rdfsplus-optimized`` infers
+        an ``owl:inverseOf``, but it does not type the object of an ``rdfs:range``. Removed after
+        the test, so no other test meets the inferred statements."""
+        declaration = [
+            (IS_POSSESSION_STATE_OF, IRI("owl:inverseOf"), HAS_POSSESSED_WORKPIECE)
+        ]
+        db.triples_add(declaration, check_exist=False)
+        yield
+        db.triples_delete(declaration)
+
+    def test_an_iri_with_only_inferred_statements_is_created(
+        self, db, live_ogm, inverse_of_possessed_workpiece
+    ):
         workpiece, state = fresh("box"), fresh("state")
         db.triples_add(
             [

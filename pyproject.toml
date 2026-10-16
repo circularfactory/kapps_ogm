@@ -21,7 +21,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kapps-ogm"
-version = "0.3.0"
+version = "0.3.1"
 description = "Read and write RDF instance data as pydantic models, with the shape derived from the ontology's own OWL restrictions."
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
@@ -68,7 +68,7 @@ classifiers = [
 dependencies = [
     "rdflib>=7.1.3,<8.0.0",
     "pydantic>=2.12.4,<3.0.0",
-    "kapps-triplestore-interface~=2.2.0",
+    "kapps-triplestore-interface~=2.2.1",
 ]
 
 [project.urls]
@@ -126,10 +126,19 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --strict-markers"
 markers = [
-    "live: needs a reachable GraphDB (the GRAPHDB_* environment variables). Applied automatically to every test that requests the `db` fixture, directly or through another fixture such as `ogm`, so it cannot drift out of step with what a test needs. `-m 'not live'` selects the tier that runs without a triple store: 253 of 330 tests. The 77 it drops are all under `tests/unit/`, which is not the mock-only directory its name suggests. That tier is for a laptop, not for CI -- CI provisions a disposable GraphDB, with SHACL validation on, and runs all 330.",
+    "live: needs a reachable triple store (the TRIPLESTORE_URL, TRIPLESTORE_USERNAME and TRIPLESTORE_PASSWORD environment variables; the dataset comes from `--repository`). Applied automatically to every test that requests the `db` fixture, directly or through another fixture such as `ogm`, so it cannot drift out of step with what a test needs. `-m 'not live'` selects the tier that runs without a triple store: 367 of 459 tests. The 92 it drops are all under `tests/unit/`, which is not the mock-only directory its name suggests. That tier is for a laptop, not for CI -- CI provisions a disposable store, with SHACL validation on, and runs all 459.",
 ]
 log_cli = "true"
 log_cli_level = "info"
 # rdflib's SPARQL parser calls pyparsing names that pyparsing 3.3 deprecates, once per parse. The
 # warning is about rdflib's code, not this project's, and it buried every other warning.
-filterwarnings = ["ignore::pyparsing.warnings.PyparsingDeprecationWarning"]
+#
+# The triple store interface keeps each name that it replaces for one release, as an alias that
+# warns. The package and the tests use only the new names, so a use of an old one is an error here.
+# The interface attributes each warning to its caller's line, so no module field can select its
+# warnings: the filter selects the form that each of them has, `<old> is deprecated; use`, `set`
+# or `pass` `<successor>`. `tests/unit/test_interface_deprecations_are_errors.py` covers each kind.
+filterwarnings = [
+    "ignore::pyparsing.warnings.PyparsingDeprecationWarning",
+    "error:\\w+ is deprecated; (use|set|pass) :DeprecationWarning",
+]

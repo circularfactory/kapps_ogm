@@ -1,5 +1,94 @@
 # Changelog
 
+## 0.3.1 — 2026-10-16
+
+- **The type of an OGM error tells the caller what to do.** The OGM's own errors have one base,
+  `OGMError`, and four categories: `OGMDataError` (the data breaks the class: Refused),
+  `OGMOntologyError` (the ontology has a shape the OGM cannot map: Repair), `OGMNotFoundError`
+  (the instance or the node does not exist, or cannot be resolved: Refresh) and `OGMUsageError`
+  (the API was called incorrectly: Fix the call). `OGMUsageTypeError`, a subclass of
+  `OGMUsageError`, replaces each `TypeError` the OGM raised. All six are exported from
+  `kapps_ogm`. Each category also subclasses the built-in it replaces, so `except ValueError`
+  still catches all four, every error that was a `TypeError` still is one, and every message is
+  the text it was. `OGMUsageTypeError` is a `ValueError` too, so an `except ValueError` now also
+  catches a `commit()` called with neither or both of its forms, or with a change that is not a
+  `Create` or an `Update`.
+- The errors carry the raw context as attributes, each `None` where it does not apply:
+  `instance_iri`, `property_iri`, `class_iri` and `value` on `OGMDataError`, `class_iri` and
+  `property_iri` on `OGMOntologyError`, and `iri` on `OGMNotFoundError`. The attributes interpret
+  nothing.
+- A class scope that names a property its class does not have, or that continues a property chain
+  past a property with a literal range, raises `OGMDataError`, also when the caller builds the
+  scope for `create` or `fetch`.
+- `AnonymousNodeFetchError`, `UnresolvableNodeAddressError` and `AmbiguousNodeAlignmentError` are
+  subclasses of `OGMNotFoundError`, and they carry the IRI they name in `iri`.
+- An error of the triple store interface, and a `pydantic.ValidationError`, still reach the caller
+  unchanged, as the same object. A `RuntimeError` is still an internal fault of the OGM.
+- **Fixed:** the validators that parse a nested object or a nested anonymous node imported `Node`
+  under a handler that caught every exception, so an error in that import was hidden. They now
+  catch only `ImportError`.
+
+- **No query of the OGM names a store-specific graph.** Two queries read explicit statements
+  only: the property discovery of a class specification, and the read of a complex property's
+  anonymous nodes in `fetch`. They now state that scope through the triple store interface's
+  `SPARQLQuery` with `include_implicit=False`, and the interface writes the form its store
+  understands. Before, each query named GraphDB's explicit-statements graph itself, which another
+  store reads as an empty named graph, so the queries would return nothing there. The property
+  discovery also used the `owl:` and `rdf:` prefixes without declaring them; it now writes full
+  IRIs. On GraphDB the results do not change.
+- **A class specification at the FULL level ends where a class repeats on its path.** At the FULL
+  level an object property nests the FULL specification of its range class. A class that its
+  properties lead back to, directly (a task that has a reference task) or through other classes,
+  was specified again and again, and the call raised an invalid-query error caused by the maximum
+  recursion depth. Now a range class that is already on the specification path, from the root
+  class to the current class, is nested as an IRI-only link: a `ClassSpec` with the class's IRI
+  and no properties. The read path, the write path, blank-instance generation and display take it
+  as a link, as they take a nested class without properties from a class scope. A class on two
+  paths without a cycle is still specified in full on both. A class scope is followed as it is
+  given, so a scoped fetch returns what it returned before. A property without an `rdfs:range`
+  still raises `ValueError` at the FULL level.
+- The properties of a class specification are in sorted order. Before, their order depended on the
+  hash seed of the process.
+- **The wheel ships the `py.typed` marker (PEP 561)**, so that a type checker such as mypy reads the package's own annotations instead of reporting an untyped import for every import of `kapps_ogm`.
+
+- **The OGM types its store by the triple store interface's contract.** `OGM(db=...)` annotates
+  the store as `TripleStore`, the contract type of `kapps-triplestore-interface`, and no longer as
+  the interface's adapter class. Any store of the contract works: the store that the interface's
+  `connect()` returns, the adapter itself, and a test double that implements the operations that
+  the OGM calls. The OGM calls only operations that the contract declares. A caller that passes
+  the adapter, as before, changes nothing; a type checker accepts it, because the adapter
+  implements the contract.
+- The package, its docstrings, the README and the documentation name no triple store vendor,
+  apart from the token provider `GDBTokenAuth` in the README's example. The example builds its
+  store with `connect()`, from `TRIPLESTORE_URL`, `TRIPLESTORE_DATASET`, `TRIPLESTORE_USERNAME` and
+  `TRIPLESTORE_PASSWORD`, and logs in for a token, because a store may refuse Basic authentication.
+- **The live tests build their store with `connect()`**, from `TRIPLESTORE_URL`,
+  `TRIPLESTORE_USERNAME` and `TRIPLESTORE_PASSWORD`, and skip without one of them. They no longer
+  read the `GRAPHDB_*` variables. The dataset still comes from `pytest --repository` alone, and
+  `TRIPLESTORE_DATASET` is not read. The opt-in for a run that clears a dataset on a shared host
+  is `TRIPLESTORE_ALLOW_DESTRUCTIVE=1`; `GRAPHDB_ALLOW_DESTRUCTIVE` no longer counts.
+- **A live test run removes every SHACL shape of the dataset it runs on.** The tests load their
+  shapes with the store's shapes registry, `shapes_set`, which replaces every shape of the
+  dataset. So a run now also removes the shapes that other code loaded into that dataset, where
+  before it removed only its own. Load them again after a run.
+- The test suite turns each `DeprecationWarning` of the triple store interface into an error, so a
+  use of a name that the interface deprecates fails its test.
+- **A property takes its maximum count from the restrictions of its class too.** The class
+  specification reads the restrictions under `rdfs:subClassOf` of the class and of its
+  superclasses: `owl:cardinality`, `owl:maxCardinality`, `owl:qualifiedCardinality` and
+  `owl:maxQualifiedCardinality`. The bound becomes the property's maximum on that class and its
+  subclasses. Where it meets the maximum of `owl:FunctionalProperty`, the tightest wins. The
+  qualifier (`owl:onClass`, `owl:onDataRange`) is not checked: the bound counts every value, and
+  two IRIs count as two values. No minimum is taken. Before, only `owl:FunctionalProperty` and an
+  `rdfs:range` restriction gave a maximum, so an ontology that bounds its properties on its
+  classes, such as Core, bounded nothing in the data model.
+- A write that passed before is refused now: `create` and `commit` refuse a value over a class
+  bound before the write, with the error of every value over a maximum, a
+  `pydantic.ValidationError` that names the property and the maximum ("at most 1 item"). A
+  materializing `fetch`, and a `commit`, of a stored instance that holds more values than its
+  class bound raise that error too. Each class specified with its properties costs one more read
+  of the store.
+
 ## 0.3.0 — 2026-10-05
 
 ### Added

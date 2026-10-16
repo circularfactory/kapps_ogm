@@ -658,10 +658,12 @@ class TestSingleRangeIsUnchanged:
         prop_iri = IRI(NS_test + "hasTarget")
         target_class = IRI(NS_test + "TargetClass")
 
+        # The class is declared, because not every ruleset makes a range a class.
         ogm.db.triples_add(
             [
                 (prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty")),
                 (prop_iri, IRI("rdfs:range"), target_class),
+                (target_class, IRI("rdf:type"), IRI("owl:Class")),
             ],
             check_exist=False,
         )

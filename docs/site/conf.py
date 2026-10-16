@@ -15,6 +15,9 @@ pages:
 - **The reference lists undocumented members too** (``undoc-members``). Not every public class
   and function here carries a docstring, and a reference that silently left them out would
   read as the whole API while showing part of it. They appear with their signatures.
+
+The footer's copyright text is read from the ``LICENSE`` two directories above this file, so a
+vendored copy needs a ``Copyright (c) <year> <holder>`` line there, or the build raises.
 """
 
 import logging
@@ -26,7 +29,31 @@ from pathlib import Path
 
 project = "kapps-ogm"
 author = "Etienne Hoffmann, Sören Weindel"
-copyright = "2024, Etienne Hoffmann"  # noqa: A001 - Sphinx requires this name
+
+
+def _copyright_from_license(license_path: Path) -> str:
+    """The footer's copyright text, read from the copyright lines of the LICENSE.
+
+    ``Copyright (c) 2026 Etienne Hoffmann`` becomes ``2026, Etienne Hoffmann``, the form Sphinx
+    prints. The LICENSE is the only place the holder and year are written; several lines join
+    with ``; ``.
+    """
+    entries = re.findall(
+        r"^Copyright(?: \(c\))? (\S+) (.+?)\s*$",
+        license_path.read_text(encoding="utf-8"),
+        flags=re.MULTILINE | re.IGNORECASE,
+    )
+    if not entries:
+        raise ValueError(
+            f"{license_path} has no 'Copyright (c) <year> <holder>' line, so the docs footer "
+            "cannot be derived from it."
+        )
+    return "; ".join(f"{year}, {holder}" for year, holder in entries)
+
+
+copyright = _copyright_from_license(  # noqa: A001 - Sphinx requires this name
+    Path(__file__).parent.parent.parent / "LICENSE"
+)
 
 release = _installed_version("kapps-ogm")
 version = ".".join(release.split(".")[:2])

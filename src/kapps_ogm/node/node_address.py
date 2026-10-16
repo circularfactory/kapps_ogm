@@ -63,7 +63,8 @@ def reconcile_anonymous_addresses(*, old: "Node", new: "Node") -> None:
                 f"Cannot align {len(new_values)} value(s) of {property_iri} on {new.id} against "
                 f"the {len(old_values)} currently stored: anonymous nodes are matched by "
                 "position, so it is not determinable which was removed. Commit the full list, "
-                "or clear the property entirely."
+                "or clear the property entirely.",
+                iri=new.id,
             )
 
         for index, new_value in enumerate(new_values):

@@ -1,7 +1,9 @@
 """A single-valued property holds its one value, as a list of at most one.
 
 A property whose maximum is one is single-valued. Its maximum comes from `owl:FunctionalProperty`,
-or from an `rdfs:range` restriction with `owl:cardinality 1` or `owl:maxCardinality 1`. Its field
+from an `rdfs:range` restriction with `owl:cardinality 1` or `owl:maxCardinality 1`, or from a
+restriction of its class or of a superclass under `rdfs:subClassOf` with `owl:cardinality`,
+`owl:maxCardinality`, `owl:qualifiedCardinality` or `owl:maxQualifiedCardinality` 1. Its field
 is a list like every other field: `[value]` with its one value, and `[]` without one. So the shape
 of the data never depends on a cardinality declaration, and a fetch, `model_dump()`, commit cycle
 needs no conversion. A second value is refused before the write, and the error names the maximum.
@@ -11,8 +13,9 @@ the one value as well as two, and a materializing fetch of a stored value failed
 because it reads the stored instance as a model before it changes it.
 
 The first classes check the field on hand-built specs, and the refusal on a mocked store. The live
-classes read each declaration from a real store and go through `OGM.create`, `OGM.commit` and a
-materializing `OGM.fetch`.
+classes read the functional property and the two range restrictions from a real store and go
+through `OGM.create`, `OGM.commit` and a materializing `OGM.fetch`. The class restrictions are read
+in `test_class_restriction_maximum.py`, from a stand-in of Core on a mocked store.
 """
 
 import uuid

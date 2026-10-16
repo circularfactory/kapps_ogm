@@ -1,30 +1,63 @@
 """Shared pytest fixtures.
 
-The `db` fixture here is a **live** GraphDB, and `ogm` is built on it. That matters more than
+The `db` fixture here is a **live** triple store, and `ogm` is built on it. That matters more than
 it looks, because `tests/unit/` is not all mock-driven. `tests/unit/conftest.py` offers a
 mocked pair (`mock_db`, `ogm_with_mock_db`), but a test that asks for plain `ogm` gets the live
 one. 28 tests do, spread over three files -- `test_range_merge_across_subproperties.py` (23),
 `test_property_spec_edge_cases.py` (4) and `test_node_errors.py` (1). They cannot be moved onto
 the mock: they write real triples and rely on the store to resolve `rdfs:subPropertyOf*` and to
-report an `rdfs:range` target as a class, which a `Mock(spec=GraphDB)` returning `[]` cannot
-do. 16 more, in `test_commit_several_instances.py`, ask for `db` itself: they prove that the
+report which IRIs are classes, which a `Mock(spec=TripleStore)` returning `[]` cannot do. 16 more,
+in `test_commit_several_instances.py`, ask for `db` itself: they prove that the
 store admits or refuses a write to several instances as a whole, and one of their classes needs
-SHACL validation on in the repository: its store must be the delegate of an `rdf4j:ShaclSail`.
-A local repository without that wrapper has no SHACL, so that class errors there: recreate the
-repository with it. 5 more, in `test_owl_minimums_not_required.py`, read OWL restrictions from
+SHACL validation on in the dataset. A local dataset without SHACL validation refuses to take
+shapes, so that class errors there: recreate the dataset with SHACL validation on. 5 more, in
+`test_owl_minimums_not_required.py`, read OWL restrictions from
 the store and create and commit instances through them. 20 more, in
 `test_single_valued_property.py`, read each single-valued declaration from the store and go
 through `OGM.create`, `OGM.commit` and a materializing `OGM.fetch`. 8 more, in
 `test_create_and_commit_report_the_truth.py`, make writes whose precondition is false in the
-store, and check that the call raises and that the store keeps what it held.
+store, and check that the call raises and that the store keeps what it held. 3 more, in
+`test_suite_shapes.py`, check that the suite's SHACL shape comes and goes through the store's
+shapes registry, and that a load replaces the shapes before it. 6 more, in
+`test_explicit_statements_only.py`, check that a fetched anonymous node
+holds only its asserted statements, and which properties a class gets through its domains, its
+superclasses and a union domain. 6 more, in `test_full_hydration_cycles.py`, specify classes
+that their properties lead back to at the FULL level, and fetch through such a cycle with a
+class scope.
 
-The development repository's CI provisions a disposable GraphDB for them, so the whole suite
-runs there. A checkout without a triple store skips those 77, which is a report of what was
+The development repository's CI provisions a disposable store for them, so the whole suite
+runs there. A checkout without a triple store skips those 92, which is a report of what was
 not run rather than a claim that it passed.
 
-`db` **wipes** the store it connects to, so it refuses any target it cannot tell is disposable.
-See `is_disposable_target` below for what disposable means and for the one environment
-variable that overrides it.
+**The store comes from `connect()`** of the triple store interface, and from nowhere else. Its
+URL and the credentials come from `TRIPLESTORE_URL`, `TRIPLESTORE_USERNAME` and
+`TRIPLESTORE_PASSWORD`. Without one of the three, the live tier skips, also when the
+interface's deprecated fallbacks of these variables are set: they are never read.
+
+**The dataset is named on the command line, never read from the environment**:
+`pytest --repository <name>`. It defaults to `OGM`, the dataset CI creates. `TRIPLESTORE_DATASET`
+is not read, whatever it names.
+
+`db` **wipes** three graphs of the dataset it connects to at session start: the default
+graph and two named graphs under `example.org`. On a dataset that other code also uses,
+whatever that code keeps in those graphs is gone after a run, and that code must load it again.
+Check that nothing runs on the dataset before a run. Every other named graph is left alone.
+
+**`db` also removes every SHACL shape of the dataset**, at session start and after each test that
+loads one. The suite sets its shapes through the store's shapes registry, `shapes_set`, which
+replaces all the shapes of the dataset in one write; it cannot remove only its own. So the shapes
+that other code loaded into the dataset are gone after a run, and that code must load them again.
+A dataset without SHACL validation has no shapes to remove, and the session start leaves it as it
+is.
+
+The institute's throwaway dataset `Tests` is such a dataset: the `jms_kapps` use cases run
+on it, and their seed loads their data into its default graph and UC2's shapes into its shapes
+registry. A run with `--repository Tests` clears the three graphs above and removes UC2's
+shapes, and it leaves every other named graph as it was. After such a run, seed `jms_kapps`
+again before a use case runs on `Tests`.
+
+`db` refuses any target it cannot tell is disposable. See `is_disposable_target` below for what
+disposable means and for the one environment variable that overrides it.
 """
 
 import os
@@ -32,26 +65,73 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from kapps_triplestore_interface import GraphDB, GraphDBCredentials
+from kapps_triplestore_interface import (
+    GDBTokenAuth,
+    TripleStore,
+    TripleStoreEndpoint,
+    TripleStoreNotSupportedError,
+    connect,
+)
 
 from kapps_ogm.ogm import OGM
 
-# The suite wipes the graphs it connects to, so it names its repository itself rather than
-# taking one from the environment, which may point at anything -- the same hazard
-# `kapps_semantic_middleware` pinned its own repository for.
-#
-# This was already the effective behaviour and is now the stated one. The previous
-# `REPOSITORY or os.getenv("GRAPHDB_REPOSITORY")` could never reach its second half, because
-# the constant is always truthy: the variable was demanded by the guard below and then ignored.
-# That dead demand is what made the `GRAPHDB_REPOSITORY` / `GRAPHDB_TEST_REPOSITORY` split
-# between this repository and `kapps_triplestore_interface` look like a live disagreement.
-REPOSITORY = "OGM"
+# The suite wipes graphs of the dataset it connects to, so the dataset is named on the command
+# line, by the person who runs the suite, and never taken from the environment, which may point
+# at anything -- the same hazard `kapps_semantic_middleware` pinned its own dataset for.
+# The default is the dataset CI creates, so a run without the option runs where it always did.
+DEFAULT_REPOSITORY = "OGM"
 
-REQUIRED_ENV = ("GRAPHDB_URL", "GRAPHDB_USERNAME", "GRAPHDB_PASSWORD")
+# The media type of the documents the suite gives the store's shapes registry.
+SHAPES_TYPE = "text/turtle"
+
+SHACL_PREFIX = "@prefix sh: <http://www.w3.org/ns/shacl#> .\n"
+
+# The suite's SHACL shapes, each loaded for one test and removed after it, as Turtle without
+# the prefix of `sh:`.
+
+# A resource possesses at most one workpiece: `test_commit_several_instances.py`. Its target is
+# that file's own class, so it cannot refuse a write of any other test.
+ONE_WORKPIECE_PER_RESOURCE = """
+    <https://example.org/several#ResourceShape> a sh:NodeShape ;
+        sh:targetClass <https://example.org/several#Resource> ;
+        sh:property <https://example.org/several#ResourceShape_hasPossessor> .
+    <https://example.org/several#ResourceShape_hasPossessor> a sh:PropertyShape ;
+        sh:path <https://example.org/several#hasPossessor> ;
+        sh:maxCount 1 .
+"""
+
+# A stand-in for a shape that the suite does not own: `test_suite_shapes.py` checks that a load
+# of the shape above replaces it. Its target is a class no other test writes, so it refuses
+# nothing else.
+STAND_IN_SHAPE = """
+    <https://example.org/other#ThingShape> a sh:NodeShape ;
+        sh:targetClass <https://example.org/other#Thing> ;
+        sh:property <https://example.org/other#ThingShape_label> .
+    <https://example.org/other#ThingShape_label> a sh:PropertyShape ;
+        sh:path <https://example.org/other#label> ;
+        sh:maxCount 1 .
+"""
+
+
+def load_shape(db: TripleStore, shape: str) -> None:
+    """Make ``shape``, Turtle with the ``sh:`` prefix, the only SHACL shapes of the dataset.
+
+    The store's shapes registry replaces every shape of the dataset, so each shape that was there
+    before is gone afterwards, also one that other code loaded.
+    """
+    db.shapes_set(SHACL_PREFIX + shape, SHAPES_TYPE)
+
+
+def remove_shapes(db: TripleStore) -> None:
+    """Remove every SHACL shape of the dataset: the suite's, and each one that other code loaded."""
+    db.shapes_set("", SHAPES_TYPE)
+
+
+REQUIRED_ENV = ("TRIPLESTORE_URL", "TRIPLESTORE_USERNAME", "TRIPLESTORE_PASSWORD")
 
 # A fixture that destroys data must be **told** its target is disposable. It must not infer the
 # permission from a URL being set, which is all `db` below did until now. Nothing was lost:
-# the exported value has always been the designated test repository. But it was safe by habit
+# the exported value has always been the designated test dataset. But it was safe by habit
 # rather than by construction, and one
 # edited environment variable was the whole distance between that and a store somebody cares
 # about.
@@ -62,19 +142,20 @@ REQUIRED_ENV = ("GRAPHDB_URL", "GRAPHDB_USERNAME", "GRAPHDB_PASSWORD")
 #   alias -- `graphdb`, which is this project's CI service alias and the service name in
 #   `kapps_semantic_middleware`'s compose file -- and it resolves only inside the network that
 #   defines it. A store that other people share is always reached by a dotted name. The rule
-#   needs no allowlist and no per-repository upkeep.
+#   needs no allowlist and no per-dataset upkeep.
 #
 #   The institute's shared store is the dotted name this matters for, and it is deliberately
 #   not written here: `tests/` ships, and check 4 in `scripts/release_checks.py` rejects a
 #   private host anywhere in the public tree. The tests use `example.org` for the same reason.
-# - **`GRAPHDB_ALLOW_DESTRUCTIVE=1` is set**, which is a person saying so in as many words.
+# - **`TRIPLESTORE_ALLOW_DESTRUCTIVE=1` is set**, which is a person saying so in as many words.
+#   The opt-in's old name, from before the suite moved to `TRIPLESTORE_*`, no longer counts.
 #
 # The opt-in is deliberately not named after any of the three variables on group
-# `circular_factory` (`GRAPHDB_USER`, `GRAPHDB_PASSWORD`, `GITHUB_CIRCULAR_FACTORY_TOKEN`). A
+# `circular_factory` (the shared store's user and password, and a GitHub token). A
 # protected group variable outranks one declared in `.gitlab-ci.yml` and arrives only on
 # protected refs, which is exactly how a job passes every merge request and then fails the
 # moment it merges.
-ALLOW_DESTRUCTIVE_ENV = "GRAPHDB_ALLOW_DESTRUCTIVE"
+ALLOW_DESTRUCTIVE_ENV = "TRIPLESTORE_ALLOW_DESTRUCTIVE"
 
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
@@ -90,6 +171,38 @@ def is_disposable_target(url: str | None) -> bool:
     if not host:
         return False
     return host in LOOPBACK_HOSTS or "." not in host
+
+
+def live_store(repository: str) -> TripleStore:
+    """The store of the live tier, on the dataset ``repository``, or skip, or refuse.
+
+    The URL and the credentials come from `TRIPLESTORE_*`, the dataset from ``repository``
+    only. Skips rather than exits when a variable is missing. The previous ``sys.exit(1)`` was not
+    a skip but a hard collection failure: it reported 28 errors on a checkout whose only fault was
+    having no triple store, and a real regression could not have been seen among them. Refuses a
+    target that `is_disposable_target` cannot tell is disposable, before `connect()` sends a
+    request, unless `TRIPLESTORE_ALLOW_DESTRUCTIVE=1` is set.
+    """
+    missing = [name for name in REQUIRED_ENV if not os.getenv(name)]
+    if missing:
+        pytest.skip(f"needs a reachable triple store; unset: {', '.join(missing)}")
+
+    endpoint = TripleStoreEndpoint.from_env(dataset=repository)
+    if (
+        not is_disposable_target(endpoint.url)
+        and os.getenv(ALLOW_DESTRUCTIVE_ENV) != "1"
+    ):
+        pytest.fail(
+            f"refusing to clear graphs in dataset {repository!r} on {endpoint.url!r}.\n"
+            "This fixture wipes the default context and two named graphs at session start, and "
+            "that host is neither loopback nor a container alias, so nothing here can tell that "
+            "it is disposable.\n"
+            "Point TRIPLESTORE_URL at a local store or a service alias, or set "
+            f"{ALLOW_DESTRUCTIVE_ENV}=1 to state that the target is disposable.",
+            pytrace=False,
+        )
+
+    return connect(endpoint, GDBTokenAuth.from_env())
 
 
 def pytest_collection_modifyitems(items):
@@ -110,59 +223,49 @@ def pytest_collection_modifyitems(items):
             item.add_marker("live")
 
 
-@pytest.fixture(scope="session")
-def db() -> GraphDB:
-    """A live GraphDB client from the environment, or skip.
-
-    Skips rather than exits. The previous ``sys.exit(1)`` was not a skip but a hard collection
-    failure: it reported 28 errors on a checkout whose only fault was having no triple store,
-    and a real regression could not have been seen among them.
-    """
-    missing = [name for name in REQUIRED_ENV if os.getenv(name) is None]
-    if missing:
-        pytest.skip(f"needs a reachable GraphDB; unset: {', '.join(missing)}")
-
-    url = os.getenv("GRAPHDB_URL")
-    if not is_disposable_target(url) and os.getenv(ALLOW_DESTRUCTIVE_ENV) != "1":
-        pytest.fail(
-            f"refusing to clear graphs in repository {REPOSITORY!r} on {url!r}.\n"
-            "This fixture wipes the default context, two named graphs and the SHACL shapes "
-            "graph at session start, and "
-            "that host is neither loopback nor a container alias, so nothing here can tell that "
-            "it is disposable.\n"
-            "Point GRAPHDB_URL at a local GraphDB or a service alias, or set "
-            f"{ALLOW_DESTRUCTIVE_ENV}=1 to state that the target is disposable.",
-            pytrace=False,
-        )
-
-    credentials = GraphDBCredentials(
-        base_url=os.getenv("GRAPHDB_URL"),
-        username=os.getenv("GRAPHDB_USERNAME"),
-        password=os.getenv("GRAPHDB_PASSWORD"),
-        repository=REPOSITORY,
+def pytest_addoption(parser):
+    parser.addoption(
+        "--repository",
+        default=DEFAULT_REPOSITORY,
+        help=(
+            "The dataset the live tests clear graphs and shapes of and use "
+            f"(default: {DEFAULT_REPOSITORY})"
+        ),
     )
 
-    db = GraphDB(credentials=credentials)
+
+@pytest.fixture(scope="session")
+def repository(request) -> str:
+    """The dataset named on the command line."""
+    return request.config.getoption("--repository")
+
+
+@pytest.fixture(scope="session")
+def db(repository: str) -> TripleStore:
+    """The live store, from `live_store`, with three graphs and its SHACL shapes cleared."""
+    db = live_store(repository)
 
     for graph in [
         None,
         "http://example.org/named_graph",
         "http://example.org/local_named_graph",
     ]:
-        assert db.clear_graph(graph)
-    # A shape survives a clear of the default graph. A test that loads one removes it again,
-    # but a run killed before that leaves it active, so the next session starts without it.
-    db.query(
-        "CLEAR SILENT GRAPH <http://rdf4j.org/schema/rdf4j#SHACLShapeGraph>",
-        update=True,
-    )
+        assert db.graph_clear(graph)
+    # A shape survives a clear of the default graph. A test that loads one of the suite's shapes
+    # removes the shapes again, but a run killed before that leaves its shape active, so the next
+    # session starts without shapes. A dataset without SHACL validation holds none: only the tests
+    # that load a shape need it, and they fail there.
+    try:
+        remove_shapes(db)
+    except TripleStoreNotSupportedError:
+        pass
 
     return db
 
 
 @pytest.fixture
-def ogm(db: GraphDB) -> OGM:
-    """An OGM instance backed by the **live** database.
+def ogm(db: TripleStore) -> OGM:
+    """An OGM instance backed by the **live** store.
 
     The mocked counterpart is `ogm_with_mock_db` in `tests/unit/conftest.py`. This docstring
     used to say "with a mocked database", which is what this one is not.

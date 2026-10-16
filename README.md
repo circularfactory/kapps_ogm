@@ -20,8 +20,8 @@ is one source of truth, and it is the store.
 pip install kapps-ogm
 ```
 
-Python 3.12 or later. You also need a reachable GraphDB triplestore — this library maps to and
-from one, it does not embed one. The client is `kapps-triplestore-interface`, which installs as a
+Python 3.12 or later. You also need a reachable triple store — this library maps to and from
+one, it does not embed one. The client is `kapps-triplestore-interface`, which installs as a
 dependency; you do not need to install it yourself.
 
 ## A round-trip example
@@ -29,23 +29,24 @@ dependency; you do not need to install it yourself.
 Write an instance, read it back, and compare. Nothing here names a host: the connection comes
 from the environment.
 
-```python
-import os
+The OGM takes any store of the triple store interface's contract, `TripleStore`, and `connect()`
+gives you one. It checks that the store answers, accepts the identity and has the dataset before
+it returns. `TripleStoreEndpoint.from_env()` reads the store's URL and its dataset from
+`TRIPLESTORE_URL` and `TRIPLESTORE_DATASET`, and `GDBTokenAuth.from_env()` the identity from
+`TRIPLESTORE_USERNAME` and `TRIPLESTORE_PASSWORD`. It logs in for a token, because a store may
+refuse Basic authentication; the triple store interface's documentation lists the other auth
+providers.
 
-from kapps_triplestore_interface import IRI, GraphDB, GraphDBCredentials
+```python
+from kapps_triplestore_interface import IRI, GDBTokenAuth, TripleStoreEndpoint, connect
 
 from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.class_scope import ClassScope
 
 ONTOLOGY = "https://example.org/ontology#"
 
-credentials = GraphDBCredentials(
-    base_url=os.environ["GRAPHDB_URL"],
-    username=os.environ["GRAPHDB_USERNAME"],
-    password=os.environ["GRAPHDB_PASSWORD"],
-    repository=os.environ["GRAPHDB_REPOSITORY"],
-)
-ogm = OGM(db=GraphDB(credentials=credentials))
+store = connect(TripleStoreEndpoint.from_env(), GDBTokenAuth.from_env())
+ogm = OGM(db=store)
 
 # How deep to go. An RDF graph has no natural boundary, so the caller states which
 # paths to follow out from the root class; everything else is left in the store.
@@ -127,7 +128,7 @@ between that read and the commit is then removed, and nothing reports it.
 
 Each instance gets at most one change in a call. This includes a named instance that a change
 nests with properties in its data, because the change writes about it too. Two changes that write
-one instance would each apply their own diff to it, so the call raises `ValueError` before it
+one instance would each apply their own diff to it, so the call raises `OGMUsageError` before it
 writes. Types do not count, so a `Create` can link another new instance of the same call.
 
 A `Create` refers to a new instance only, as `create` does: see below. Give a `Create` its
@@ -180,6 +181,35 @@ commits each write.
 **Known limit.** A triple that is both explicit and inferred passes the check. After the commit it
 is still visible, because a delete clears only the explicit triple, and the inferred one stays.
 
+## When a call fails
+
+The type of an error tells you what to do. The OGM's own errors have one base, `OGMError`, and
+four categories. Each category is also the built-in that the OGM raised before, so an
+`except ValueError` or `except TypeError` keeps working, and each message is the text it was.
+
+| Error | What happened | What to do |
+|---|---|---|
+| `OGMDataError` | The data breaks the class: a required property is missing, a property is unknown, a count is wrong, a value has the wrong type. | Refused: change the data. |
+| `OGMOntologyError` | The ontology has a shape that the OGM cannot map: no type, no range, ranges that do not merge, a range that the OGM does not support. | Repair the ontology. |
+| `OGMNotFoundError` | The instance or the node does not exist, or the OGM cannot resolve it. | Refresh: read the state again. |
+| `OGMUsageError` | The API was called incorrectly. `OGMUsageTypeError` is the one that is also a `TypeError`. | Fix the call. |
+
+A class scope that names a property the class does not have, or that continues a property chain
+past a property with a literal range, raises `OGMDataError` too, also when you build the scope
+yourself for `create` or `fetch`.
+
+All six types are importable from `kapps_ogm`. The attributes give the context: `instance_iri`,
+`property_iri`, `class_iri` and `value` on `OGMDataError`, `class_iri` and `property_iri` on
+`OGMOntologyError`, and `iri` on `OGMNotFoundError`. An attribute is `None` where it does not
+apply.
+
+The OGM does not change an error that it did not detect. An error of the triple store interface,
+such as `PreconditionFailedError` or a SHACL refusal, reaches you as the same object, and so does a
+`pydantic.ValidationError` from the generated model. That includes a value that breaks an
+`owl:someValuesFrom` or `owl:allValuesFrom` restriction: pydantic runs that check, so it reaches
+you as a `pydantic.ValidationError`, not as an `OGMDataError`. A `RuntimeError` is an internal fault
+of the OGM.
+
 ## What the ontology has to declare
 
 The mapper reads shapes out of the store, so a class whose properties are undeclared maps to an
@@ -210,7 +240,7 @@ The minting authority is an ontology-governance decision rather than this librar
 namespace is configurable per instance and the default is a documented placeholder:
 
 ```python
-ogm = OGM(db=db, skolem_namespace="https://example.org/.well-known/genid/")
+ogm = OGM(db=store, skolem_namespace="https://example.org/.well-known/genid/")
 ```
 
 The `/.well-known/genid/` path itself is not configurable. A namespace without it would mint

@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from kapps_triplestore_interface import GraphDB, IRI
+from kapps_triplestore_interface import IRI, TripleStore
 from kapps_triplestore_interface.exceptions import (
     PreconditionFailedError,
     TripleStoreInterfaceError,
@@ -63,7 +63,7 @@ def measurement_spec() -> ClassSpec:
 
 @pytest.fixture
 def store() -> Mock:
-    db = Mock(spec=GraphDB)
+    db = Mock(spec=TripleStore)
     db.iri_exists.return_value = False
     return db
 

@@ -309,7 +309,8 @@ def _resolve_anonymous_address(
         f"Cannot resolve the address of the anonymous node under {predicate} on {self.id}. "
         "It is absent from Node.data and carries no mirrored address, so writing it would "
         "silently create a new node and orphan the triples attached to the existing one. "
-        "Materialize through the OGM (fetch or commit) so the address is carried."
+        "Materialize through the OGM (fetch or commit) so the address is carried.",
+        iri=self.id,
     )
 
 

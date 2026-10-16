@@ -12,7 +12,7 @@ import uuid
 
 import pytest
 
-from kapps_triplestore_interface import GraphDB, IRI
+from kapps_triplestore_interface import IRI, TripleStore
 from kapps_triplestore_interface.exceptions import PreconditionFailedError
 
 from kapps_ogm.ogm import OGM
@@ -66,12 +66,12 @@ def fresh(name: str) -> IRI:
 
 
 @pytest.fixture
-def live_ogm(db: GraphDB) -> OGM:
+def live_ogm(db: TripleStore) -> OGM:
     db.triples_add(ONTOLOGY, check_exist=False)
     return OGM(db=db)
 
 
-def explicit(db: GraphDB, subject: IRI, graph: IRI) -> set:
+def explicit(db: TripleStore, subject: IRI, graph: IRI) -> set:
     """The explicit triples with ``subject`` in ``graph``, as (predicate, value) strings."""
     rows = db.query(
         f"SELECT ?p ?o WHERE {{ GRAPH <{graph}> {{ <{subject}> ?p ?o }} }}",
@@ -80,7 +80,7 @@ def explicit(db: GraphDB, subject: IRI, graph: IRI) -> set:
     return {(str(row["p"]), str(row["o"])) for row in rows}
 
 
-def values(db: GraphDB, subject: IRI, predicate: IRI, graph: IRI) -> set:
+def values(db: TripleStore, subject: IRI, predicate: IRI, graph: IRI) -> set:
     return {float(o) for p, o in explicit(db, subject, graph) if p == str(predicate)}
 
 

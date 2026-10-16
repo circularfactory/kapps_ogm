@@ -5,8 +5,8 @@ import sys
 import pytest
 from unittest.mock import Mock
 
-from kapps_triplestore_interface import GraphDB, GraphDBCredentials, IRI
-from kapps_triplestore_interface.exceptions import GraphDbException
+from kapps_triplestore_interface import IRI, TripleStore
+from kapps_triplestore_interface.exceptions import TripleStoreResponseError
 from kapps_ogm.ogm import OGM
 from kapps_ogm.mapping.class_spec import ClassSpec
 from kapps_ogm.node.core import Node
@@ -33,8 +33,6 @@ HAS_CONVEYOR_SPEED = IRI(
 HAS_VALUE = IRI("https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue")
 HAS_UNIT = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit")
 
-REPOSITORY = "Tests"
-
 MOCK_INSTANCE_DATA = {
     HAS_CONVEYOR_BELT.lined: [
         {
@@ -51,22 +49,23 @@ MOCK_INSTANCE_DATA = {
 
 @pytest.fixture
 def mock_db():
-    """Create a mock GraphDB instance."""
-    db = Mock(spec=GraphDB)
+    """A mock store with the spec of the contract, `TripleStore`."""
+    db = Mock(spec=TripleStore)
     db.triples_get = Mock(return_value=[])
     db.iri_exists = Mock(return_value=False)
-    db.owl_is_named_individual = Mock(return_value=False)
     db.owl_get_classes_of_individual = Mock(return_value=[])
     db.new_iri = lambda base, schema: schema(base)
 
     return db
 
 
-class StoreRefusal(GraphDbException):
-    """A subclass of `GraphDbException`. It proves that a subclass reaches the caller with its own type."""
+class StoreRefusal(TripleStoreResponseError):
+    """A subclass of `TripleStoreResponseError`. It proves that a subclass reaches the caller with its own type."""
 
 
-@pytest.fixture(params=[GraphDbException, StoreRefusal], ids=lambda cls: cls.__name__)
+@pytest.fixture(
+    params=[TripleStoreResponseError, StoreRefusal], ids=lambda cls: cls.__name__
+)
 def store_error(request):
     """An error the triple store raises on a write, carrying a report in its message."""
     return request.param("Error while querying GraphDB (500) - <validation report>")

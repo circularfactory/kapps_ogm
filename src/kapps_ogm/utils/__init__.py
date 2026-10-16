@@ -12,6 +12,12 @@ from .class_scope import ClassScope
 from .errors import (
     AmbiguousNodeAlignmentError,
     AnonymousNodeFetchError,
+    OGMDataError,
+    OGMError,
+    OGMNotFoundError,
+    OGMOntologyError,
+    OGMUsageError,
+    OGMUsageTypeError,
     UnresolvableNodeAddressError,
 )
 from .skolem import (
@@ -31,6 +37,12 @@ __all__ = [
     "format_class_spec",
     "OGMEncoder",
     "ClassScope",
+    "OGMError",
+    "OGMDataError",
+    "OGMOntologyError",
+    "OGMNotFoundError",
+    "OGMUsageError",
+    "OGMUsageTypeError",
     "AmbiguousNodeAlignmentError",
     "AnonymousNodeFetchError",
     "UnresolvableNodeAddressError",

@@ -11,6 +11,12 @@ from .utils import (
     PROPERTY_CHARACTERISTICS,
     OGMEncoder,
     ClassScope,
+    OGMError,
+    OGMDataError,
+    OGMOntologyError,
+    OGMNotFoundError,
+    OGMUsageError,
+    OGMUsageTypeError,
 )
 
 __all__ = [
@@ -27,4 +33,11 @@ __all__ = [
     "PROPERTY_CHARACTERISTICS",
     "OGMEncoder",
     "ClassScope",
+    # Errors
+    "OGMError",
+    "OGMDataError",
+    "OGMOntologyError",
+    "OGMNotFoundError",
+    "OGMUsageError",
+    "OGMUsageTypeError",
 ]

@@ -13,6 +13,7 @@ from kapps_triplestore_interface.utils import utils
 from kapps_triplestore_interface.utils.types import IRILike, Triple
 
 from kapps_ogm.mapping.property_spec import PropertyValueKind
+from kapps_ogm.utils.errors import OGMDataError, OGMUsageError, _one_or_none
 
 from .node_validator import NodeValidator
 from .node_data_formatter import sanitize_data, format_for_instance
@@ -58,13 +59,13 @@ class Node:
             if id is None:
                 id = instance.id
             elif id != instance.id:
-                raise ValueError("Provided id does not match instance id")
+                raise OGMUsageError("Provided id does not match instance id")
 
         if data is not None and "id" in data and data["id"] is not None:
             if id is None:
                 id = data["id"]
             elif id != data["id"]:
-                raise ValueError("Provided id does not match instance id")
+                raise OGMUsageError("Provided id does not match instance id")
 
         if id is not None and not isinstance(id, (IRI, BNode)):
             id = IRI(id)
@@ -178,7 +179,7 @@ class Node:
             return
 
         if class_spec is None:
-            raise ValueError(f"Node {self} has data but no matching ClassSpec")
+            raise OGMUsageError(f"Node {self} has data but no matching ClassSpec")
 
         # An IRI given as the value of an object property names the instance it links to. It
         # means the same as ``{"id": iri}``, so it becomes the same Node: one with an id and no
@@ -214,8 +215,11 @@ class Node:
         unknown_properties = data_properties - spec_properties
         if unknown_properties:
             # Named by its IRI: the node is not materialized yet, so its repr would fail here.
-            raise ValueError(
-                f"Node {self.id!r} data contains OBJECT or COMPLEX properties not defined in ClassSpec {class_spec}: {unknown_properties}"
+            raise OGMDataError(
+                f"Node {self.id!r} data contains OBJECT or COMPLEX properties not defined in ClassSpec {class_spec}: {unknown_properties}",
+                instance_iri=self.id,
+                property_iri=_one_or_none(unknown_properties),
+                class_iri=class_spec.iri,
             )
         known_properties = data_properties & spec_properties
 
@@ -226,8 +230,12 @@ class Node:
 
             for domain_instance in domain_list:
                 if not isinstance(domain_instance, Node):
-                    raise ValueError(
-                        f"Node {self} property {property_iri} expected Node instances, got literal {domain_instance}"
+                    raise OGMDataError(
+                        f"Node {self} property {property_iri} expected Node instances, got literal {domain_instance}",
+                        instance_iri=self.id,
+                        property_iri=property_iri,
+                        class_iri=class_spec.iri,
+                        value=domain_instance,
                     )
 
                 domain_instance.class_spec = prop_spec.nested
