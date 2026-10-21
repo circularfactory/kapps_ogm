@@ -1,7 +1,8 @@
 """Pin the contract: a model built for a class ignores undeclared keys, it does not refuse them.
 
-Under the open world a graph carries more than any schema declares, so strict rejection of
-unknown keys stays off for fetch and for write.
+Under the open world a graph carries more than any schema declares, so the model never rejects
+unknown keys. The write paths of the OGM refuse an undeclared property before the model is
+built; the model itself stays tolerant for the read path.
 """
 
 import pytest

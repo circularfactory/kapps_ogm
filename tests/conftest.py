@@ -23,10 +23,15 @@ shapes registry, and that a load replaces the shapes before it. 6 more, in
 holds only its asserted statements, and which properties a class gets through its domains, its
 superclasses and a union domain. 6 more, in `test_full_hydration_cycles.py`, specify classes
 that their properties lead back to at the FULL level, and fetch through such a cycle with a
-class scope.
+class scope. 1 more, in `test_append_one_value.py`, appends to one property of one instance
+from two threads at once, and checks that both values land. 2 more, in
+`test_superclass_scope_covers_later_subclass.py`, declare a subclass after a class scope exists
+and hydrate its instance under that scope. 5 more, in
+`test_refused_write_leaves_the_store_unchanged.py`, refuse a write that names an undeclared
+property and check that the store keeps what it held.
 
 The development repository's CI provisions a disposable store for them, so the whole suite
-runs there. A checkout without a triple store skips those 92, which is a report of what was
+runs there. A checkout without a triple store skips those 100, which is a report of what was
 not run rather than a claim that it passed.
 
 **The store comes from `connect()`** of the triple store interface, and from nowhere else. Its

@@ -57,10 +57,15 @@ NON_XSD_DATATYPES = frozenset(
 )
 
 
-def _names_a_datatype(target: IRI) -> bool:
-    """Whether a restriction's target names a datatype rather than a class.
+RDFS_DATATYPE = IRI("http://www.w3.org/2000/01/rdf-schema#Datatype")
 
-    Decided by namespace, deliberately not by membership of `XSDToPythonTypes`. That map
+
+def _names_a_datatype(target: IRI) -> bool:
+    """Whether an rdfs:range or restriction target names a datatype by its IRI alone.
+
+    A datatype declared `rdf:type rdfs:Datatype` outside these namespaces needs the store.
+
+    Chosen by namespace, deliberately not by membership of `XSDToPythonTypes`. That map
     covers 33 datatypes, so `xsd:gMonth`, `xsd:gDay` and `xsd:dateTimeStamp` are absent
     from it — and reading a miss as "then it must be a class" would silently turn a
     literal restriction into an object one.
@@ -186,11 +191,10 @@ class PropertySpec:
                 else:
                     base_type = self.python_range_type or Any
             case PropertyValueKind.OBJECT:
-                # Nested hydrated class becomes Pydantic model; else fallback to IRI
-                if (
-                    not self.nested
-                    or self.nested.hydration_level is ClassHydrationLevel.REFERENCE
-                ):
+                # A nested class becomes a Pydantic model, whatever its level: its properties
+                # decide, and a class without properties is a model of its id alone, a link.
+                # Without a nested class the field falls back to IRI.
+                if not self.nested:
                     base_type = IRI
                 else:
                     nested_model = self.nested.to_pydantic_model()
@@ -559,14 +563,44 @@ class PropertySpec:
                     python_type=prop_range,
                 )
             elif isinstance(prop_range, IRI):
-                property_spec = cls._specify_class_property(
-                    prop_iri=prop_iri,
-                    range_iri=prop_range,
-                    nested_scope=nested_scope,
-                    ogm=ogm,
-                    hydration_level=hydration_level,
-                    path=_path,
-                )
+                # A datatype is asked for before a class: on a store with RDFS inference
+                # every range object is also a class, and rdfs:Datatype is a subclass of
+                # rdfs:Class.
+                range_types: Optional[list[IRI]] = None
+                if _names_a_datatype(prop_range):
+                    names_datatype = True
+                elif prop_range in _path:
+                    # A class on the path is a class: no read is needed to know it.
+                    names_datatype = False
+                else:
+                    range_types = [
+                        triple[2]
+                        for triple in ogm.db.triples_get(
+                            sub=prop_range, pred="rdf:type", include_implicit=True
+                        )
+                    ]
+                    names_datatype = RDFS_DATATYPE in range_types
+                if names_datatype:
+                    if nested_scope:
+                        raise OGMDataError(
+                            f"Property {prop_iri} cannot be part of a property chain as it has a literal range {prop_range}",
+                            property_iri=prop_iri,
+                            class_iri=_path[-1] if _path else None,
+                        )
+                    # No fixed python type: the field takes the literal as given.
+                    property_spec = cls._specify_literal_property(
+                        prop_iri=prop_iri, python_type=None
+                    )
+                else:
+                    property_spec = cls._specify_class_property(
+                        prop_iri=prop_iri,
+                        range_iri=prop_range,
+                        nested_scope=nested_scope,
+                        ogm=ogm,
+                        hydration_level=hydration_level,
+                        path=_path,
+                        range_types=range_types,
+                    )
             else:
                 raise OGMOntologyError(
                     f"Unknown property_type: {prop_range} for property {prop_iri}",
@@ -583,7 +617,7 @@ class PropertySpec:
     def _specify_literal_property(
         cls,
         prop_iri: IRI,
-        python_type: type,
+        python_type: Optional[type],
     ) -> PropertySpec:
         property_spec = cls(
             iri=prop_iri,
@@ -604,6 +638,7 @@ class PropertySpec:
         ogm: "OGM",
         hydration_level: "ClassHydrationLevel",
         path: tuple[IRI, ...],
+        range_types: Optional[list[IRI]] = None,
     ) -> PropertySpec:
         from .class_spec import ClassSpec, ClassHydrationLevel
 
@@ -612,19 +647,26 @@ class PropertySpec:
             # would never end. It is nested as an IRI-only link: its IRI and no properties. Every
             # reader takes a nested class without properties as a link, as it takes the one that
             # a class scope gives a property it names without a nested scope (which also carries
-            # the class's types and label). REFERENCE is not used: its IRI field takes a fetched
-            # or given link as a dict, which the write path then writes as a literal.
+            # the class's types and label).
             nested_class_spec = ClassSpec(
                 iri=range_iri, hydration_level=ClassHydrationLevel.SCOPE
             )
         else:
-            nested_class_spec = ClassSpec.specify(
-                ogm=ogm,
-                class_iri=range_iri,
-                class_scope=nested_scope,
-                hydration_level=hydration_level,
-                _path=path,
-            )
+            try:
+                nested_class_spec = ClassSpec.specify(
+                    ogm=ogm,
+                    class_iri=range_iri,
+                    class_scope=nested_scope,
+                    hydration_level=hydration_level,
+                    _path=path,
+                    _known_types=range_types,
+                )
+            except OGMDataError as error:
+                # Record the property chain from the root to the class whose scope failed, so a
+                # caller that built the scope from data can name the node that carries the
+                # offending property. Internal: not part of the error's public attributes.
+                setattr(error, "_scope_chain", (prop_iri,) + getattr(error, "_scope_chain", ()))
+                raise
 
         property_spec = cls(
             iri=prop_iri,

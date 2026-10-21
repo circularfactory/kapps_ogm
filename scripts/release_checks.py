@@ -71,6 +71,15 @@ ships, check 5 scans it, and a plain literal in this docstring makes the checker
 It did, on the first run of `test_the_shipped_checker_passes_its_own_checks`.
 """
 
+CITATION: re.Pattern[str] = re.compile("ADR" + r"[-:\s]*" + "[0-9]{4}")
+"""A decision record cited by number, in every separator it has been written with.
+
+The records never ship, so a number that names one is a reference the reader cannot
+resolve -- in printed output, a docstring, a comment or a data file alike. Written as
+`ADR 00nn` wherever this file needs to name the form: a four-digit example here would
+be the one citation check 5 finds in the public tree.
+"""
+
 BANNED_PATH_FRAGMENTS: tuple[str, ...] = (
     "docs/agents/",
     ".claude/",
@@ -308,7 +317,14 @@ def check_references(tree: Path) -> list[Violation]:
 
     Walks ``tree``, skipping ``.git/`` and binary files. A file violates when its text contains
     any entry of ``DEAD_REFERENCE_DIRS`` — a full path with a filename, or a bare directory
-    named in prose. A file is reported once, for the first dead directory it names.
+    named in prose — or any match of ``CITATION``, a record named by number. A file is reported
+    once per kind: one line for the first dead directory it names, one line carrying the
+    citation count, so the sweep is sized before it starts rather than one number per run.
+
+    The count is of matches, so a citation naming several records in one breath counts once --
+    a bare `, 0028` after a comma is a citation only because of the words in front of it, and a
+    pattern loose enough to read that would fire on any four-digit number in prose. Sizing a
+    sweep is what the count is for; catching the file is the property that matters.
     """
     violations: list[Violation] = []
 
@@ -324,6 +340,15 @@ def check_references(tree: Path) -> list[Violation]:
                 )
                 break
 
+        cited = len(CITATION.findall(content))
+        if cited:
+            violations.append(
+                Violation(
+                    "references",
+                    rel_str,
+                    f"{cited} citation(s) of a decision record, which does not ship",
+                )
+            )
 
     return violations
 

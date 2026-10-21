@@ -14,6 +14,34 @@ as `owl:FunctionalProperty` or an OWL restriction whose maximum is one, or by an
 shape.
 _Avoid_: functional property (one of the declarations), scalar (a shape in code)
 
+**Append**:
+A change that adds one value to a property of a stored instance, and leaves the property's other
+values as they are, without reading them. In code, the `Append` entry of `OGM.commit`.
+_Avoid_: add (`create` adds instances), update (an `Update` replaces the values it names)
+
+**Refusal on write**:
+`create`, and a `Create` or an `Update` of `commit`, raise `OGMDataError` for a property the class
+does not declare, before anything is written. A read stays tolerant: it ignores the statement and
+warns. In code, the `refuse_unknown` keyword of `Node.materialize` and `NodeValidator.validate`,
+separate from `strict`.
+_Avoid_: strict (that is the minimum counts, which a write never enforces)
+
+**Property outside the scope**:
+A property that the class declares and the class scope of a write leaves out. `create`, and a
+`Create` of `commit`, raise `PropertyOutsideScopeError` for it, a subclass of `OGMDataError`, before
+anything is written; a write stays confined to its scope, and the error makes that loud. A property
+that the class does not declare keeps the plain `OGMDataError` of the refusal on write. In code, the
+`scope` attribute of the error lists the properties that the scope names for the class.
+`Update` derives its scope from its data, so it cannot raise this.
+_Avoid_: unknown property (that is one the class does not declare)
+
+**Deletion**:
+The mapper never deletes an individual. A property is retracted with `commit`, which removes the
+triples that the new data no longer holds. The private `_delete` raises `NotImplementedError` and
+is kept only as an entry point for a later extension. The public `delete` is a deprecated alias
+of it for one release.
+_Avoid_: delete (as a public method)
+
 ## How the mapper treats the terms
 
 **A single-valued property** gives a list of at most one, as every property gives a list: `[value]`,

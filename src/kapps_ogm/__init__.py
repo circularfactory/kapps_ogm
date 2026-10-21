@@ -1,5 +1,5 @@
 from .node.core import Node
-from .ogm import OGM, Create, Update
+from .ogm import OGM, Append, Create, Update
 
 # Import mapping specs
 from .mapping.class_spec import ClassSpec
@@ -17,6 +17,7 @@ from .utils import (
     OGMNotFoundError,
     OGMUsageError,
     OGMUsageTypeError,
+    PropertyOutsideScopeError,
 )
 
 __all__ = [
@@ -25,6 +26,7 @@ __all__ = [
     "OGM",
     "Create",
     "Update",
+    "Append",
     # Mapping specs
     "ClassSpec",
     "PropertySpec",
@@ -40,4 +42,5 @@ __all__ = [
     "OGMNotFoundError",
     "OGMUsageError",
     "OGMUsageTypeError",
+    "PropertyOutsideScopeError",
 ]

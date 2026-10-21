@@ -56,6 +56,9 @@ class ClassScope(dict[IRI, "ClassScope"]):
 
         next_property_chains: dict[IRI, list[list[IRILike]]] = {}
         for chain in property_chains:
+            # Empty data gives one empty chain, which names no property.
+            if not chain:
+                continue
             next_property_iri = IRI(chain[0])
             next_property_chains.setdefault(next_property_iri, [])
             if len(chain) > 1:

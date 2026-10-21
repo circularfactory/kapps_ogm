@@ -54,7 +54,8 @@ ogm = OGM(db=store)
 # Each chain runs from the root class down to a property you want, so a nested node
 # needs its own properties named. `[[hasComponent]]` alone would put an empty scope
 # under hasComponent, and a nested class with an empty scope is not hydrated at all --
-# hasName and isActive would be unknown properties, dropped with a warning.
+# hasName and isActive would be properties the class does not declare, and create
+# would refuse the data with an OGMDataError before writing anything.
 class_scope = ClassScope.from_property_chains(
     [
         [IRI(f"{ONTOLOGY}hasComponent"), IRI(f"{ONTOLOGY}hasName")],
@@ -86,6 +87,9 @@ fetched = ogm.fetch(
 
 assert fetched.to_json_ld() == node.to_json_ld()
 ```
+
+`create` can leave out `class_scope`: it then derives the scope from `data`, as `commit` does.
+`fetch` has no data to derive one from, so it takes the scope.
 
 `create` returns a `Node` — the mapped instance, carrying `.id` and `.data`. To get the pydantic
 model itself, call `.materialize()`:
@@ -134,6 +138,44 @@ writes. Types do not count, so a `Create` can link another new instance of the s
 A `Create` refers to a new instance only, as `create` does: see below. Give a `Create` its
 `instance_iri` when another change refers to it.
 
+## Adding one value to a property
+
+An `Append` adds one value to a property of a stored instance, and leaves the other values of
+the property as they are. It does not read them and does not write them again. So two writers
+that add a value to one property at the same moment both land, which an `Update` cannot promise.
+
+```python
+from kapps_ogm import Append
+
+ogm.commit(
+    changes=[
+        Append(
+            instance_iri=IRI(f"{ONTOLOGY}resource_1"),
+            property_iri=IRI(f"{ONTOLOGY}hasCapability"),
+            value=IRI(f"{ONTOLOGY}capability_7"),
+        )
+    ]
+)
+```
+
+The value is given as in the data of a commit. For an object property it is an IRI or
+`{"id": iri}`: a link, and the call writes nothing about the linked instance. To make that
+instance in the same write, put a `Create` of it into the same call. For an anonymous node it is
+a dictionary of the node's properties, without an `id`. Each such append makes a new node, so two
+appends of the same content give two nodes.
+
+An append is checked before the write as the value of a commit is: the class of the instance must
+have the property, and the value must fit its range. If the property has a maximum count, the call
+reads the stored values first and refuses an append that would go over the maximum, with
+`OGMDataError`. Another writer can add a value between that read and the write; if the maximum
+must hold under concurrent writers, state it as a SHACL shape. A property without a maximum is not
+read.
+
+A call whose changes are all appends sends one request: an `INSERT DATA` without a precondition.
+A value the store holds already is not added again, and the call returns normally. In a call with
+a `Create` or an `Update`, the appended triples go into the call's one `DELETE/INSERT`. Several
+appends may name one instance, but an append and another change may not.
+
 ## What create and commit promise
 
 A normal return of `create` or `commit` means that the store admitted the write: it found the
@@ -162,10 +204,14 @@ ogm.create(
         f"{ONTOLOGY}value": [1.5],
         f"{ONTOLOGY}measuredOn": [{"id": f"{ONTOLOGY}obj2"}],
     },
+    class_scope=ClassScope.from_property_chains(
+        [[IRI(f"{ONTOLOGY}value")], [IRI(f"{ONTOLOGY}measuredOn")]]
+    ),
 )
 ```
 
-**What `commit` removes.** `commit` reads the stored instance first, inferred triples included.
+**What `commit` removes.** `commit` reads the stored instance first, inferred triples included
+for its literal and object properties; an anonymous node is read from the explicit triples only.
 The triples that the new data no longer holds are the triples to remove. A delete removes only
 explicit triples, so the store checks each triple to remove against the explicit triples of the
 target graph. The call raises if one is not there. Examples are a value that the store only
@@ -178,6 +224,9 @@ can commit between the check of a write and its own commit. If an invariant must
 several writers change the store, state it as a SHACL shape. The store checks the shapes when it
 commits each write.
 
+**Appends.** A call whose changes are all appends has no precondition. A normal return means that
+the store committed its `INSERT DATA`. A value that the store holds already stays as it was.
+
 **Known limit.** A triple that is both explicit and inferred passes the check. After the commit it
 is still visible, because a delete clears only the explicit triple, and the inferred one stays.
 
@@ -189,7 +238,7 @@ four categories. Each category is also the built-in that the OGM raised before, 
 
 | Error | What happened | What to do |
 |---|---|---|
-| `OGMDataError` | The data breaks the class: a required property is missing, a property is unknown, a count is wrong, a value has the wrong type. | Refused: change the data. |
+| `OGMDataError` | The data breaks the class: a required property is missing, a value has the wrong type. On `create` and `commit`: a property the class does not declare, or, as the subclass `PropertyOutsideScopeError`, one that the class declares and the class scope leaves out (its `scope` attribute lists what the scope names). On an `Append`: also a nested value with properties, an anonymous node, or a property that holds at most one value. | Refused: change the data. |
 | `OGMOntologyError` | The ontology has a shape that the OGM cannot map: no type, no range, ranges that do not merge, a range that the OGM does not support. | Repair the ontology. |
 | `OGMNotFoundError` | The instance or the node does not exist, or the OGM cannot resolve it. | Refresh: read the state again. |
 | `OGMUsageError` | The API was called incorrectly. `OGMUsageTypeError` is the one that is also a `TypeError`. | Fix the call. |
@@ -198,6 +247,17 @@ A class scope that names a property the class does not have, or that continues a
 past a property with a literal range, raises `OGMDataError` too, also when you build the scope
 yourself for `create` or `fetch`.
 
+`create` and `commit` refuse data that names a property the class does not declare, at the top
+level or in a nested value, before any triple is written. The `OGMDataError` names the instance
+that carries the property in `instance_iri`, the property in `property_iri` and the class in
+`class_iri`. `instance_iri` is the nested value's IRI when the property is in a nested value, and
+`None` for an instance whose IRI is not minted yet, or when several nested values carry the
+property. `property_iri` is `None` when several properties are unknown; the message lists them
+all. Minimum counts stay unenforced on write. A read tolerates undeclared statements: `fetch` reads
+the statements of an anonymous node in full, and materializing a node whose data holds more than
+its class declares logs a warning and leaves the rest out, because a graph may carry more than any
+schema declares.
+
 All six types are importable from `kapps_ogm`. The attributes give the context: `instance_iri`,
 `property_iri`, `class_iri` and `value` on `OGMDataError`, `class_iri` and `property_iri` on
 `OGMOntologyError`, and `iri` on `OGMNotFoundError`. An attribute is `None` where it does not
@@ -205,7 +265,7 @@ apply.
 
 The OGM does not change an error that it did not detect. An error of the triple store interface,
 such as `PreconditionFailedError` or a SHACL refusal, reaches you as the same object, and so does a
-`pydantic.ValidationError` from the generated model. That includes a value that breaks an
+`pydantic.ValidationError` from the generated model. That includes a count above the property's maximum, and a value that breaks an
 `owl:someValuesFrom` or `owl:allValuesFrom` restriction: pydantic runs that check, so it reaches
 you as a `pydantic.ValidationError`, not as an `OGMDataError`. A `RuntimeError` is an internal fault
 of the OGM.

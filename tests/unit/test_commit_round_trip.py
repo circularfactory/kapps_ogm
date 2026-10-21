@@ -13,8 +13,8 @@ The fixture mirrors the failure recorded on the ticket: a conveyor belt whose sp
 carries a value and a unit (both declared by the range restriction) plus an MQTT topic (not
 declared, and normal under the Open World Assumption).
 
-Two failures close the file: a write the store refuses, and a value the class rejects. Each
-reaches the caller with its own type.
+Two failures follow: a write the store refuses, and a value the class rejects. Each
+reaches the caller with its own type. The last tests pin that a validation reads nothing.
 """
 
 from unittest.mock import Mock, patch
@@ -26,6 +26,7 @@ from rdflib import BNode
 from kapps_triplestore_interface import IRI, TripleStore, to_literal
 from kapps_triplestore_interface.exceptions import TripleStoreInterfaceError
 
+from kapps_ogm import Create, Update
 from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from kapps_ogm.ogm import OGM
@@ -224,3 +225,54 @@ class TestALegacyBlankNode:
     def test_the_old_side_still_names_the_blank_node(self, relocated):
         removed, _, _ = relocated
         assert any(isinstance(triple[0], BNode) for triple in removed)
+
+
+# --- A validation sends no request to the store (OGM 55) --------------------------------------
+# The removed check asked ``iri_exists`` (all three positions, which never answers true for an
+# instance) and then tested ``is_subclass`` where ``rdf:type`` was meant. A create onto an
+# existing IRI is refused by the write's absent-subjects precondition; a commit takes the class
+# of an instance from the store.
+
+NESTED = {HAS_SPEED.lined: [{HAS_VALUE.lined: [1.5]}]}
+
+
+def assert_no_validation_read(db):
+    db.iri_exists.assert_not_called()
+    db.is_subclass.assert_not_called()
+
+
+@pytest.fixture
+def ogm_and_db():
+    ogm, db = seeded_ogm(PARAMETER_IRI)
+    with patch.object(ogm, "get_class_spec", return_value=build_belt_spec()):
+        yield ogm, db
+
+
+def test_a_create_reads_nothing(ogm_and_db):
+    ogm, db = ogm_and_db
+    ogm.create(class_iri=CONVEYOR_BELT, data=NESTED, instance_iri=BELT_IRI)
+    assert_no_validation_read(db)
+    assert BELT_IRI in db.triples_add.call_args.kwargs["absent_subjects"]
+
+
+def test_a_commit_with_a_create_reads_nothing(ogm_and_db):
+    ogm, db = ogm_and_db
+    ogm.commit(
+        changes=[Create(class_iri=CONVEYOR_BELT, data=NESTED, instance_iri=BELT_IRI)]
+    )
+    assert_no_validation_read(db)
+    assert BELT_IRI in db.triples_update.call_args.kwargs["absent_subjects"]
+
+
+def test_a_commit_with_an_update_reads_nothing(ogm_and_db):
+    ogm, db = ogm_and_db
+    ogm.commit(changes=[Update(instance_iri=BELT_IRI, data=NESTED)])
+    assert_no_validation_read(db)
+
+
+def test_a_materializing_fetch_with_a_nested_node_reads_nothing():
+    ogm, db = seeded_ogm(PARAMETER_IRI)
+    spec = build_belt_spec()
+    with patch.object(ogm, "get_class_spec", return_value=spec):
+        ogm.fetch(instance_iri=BELT_IRI, class_spec=spec, materialize=True)
+    assert_no_validation_read(db)

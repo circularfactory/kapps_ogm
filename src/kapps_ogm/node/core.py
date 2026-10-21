@@ -13,7 +13,7 @@ from kapps_triplestore_interface.utils import utils
 from kapps_triplestore_interface.utils.types import IRILike, Triple
 
 from kapps_ogm.mapping.property_spec import PropertyValueKind
-from kapps_ogm.utils.errors import OGMDataError, OGMUsageError, _one_or_none
+from kapps_ogm.utils.errors import OGMDataError, OGMUsageError
 
 from .node_validator import NodeValidator
 from .node_data_formatter import sanitize_data, format_for_instance
@@ -215,12 +215,7 @@ class Node:
         unknown_properties = data_properties - spec_properties
         if unknown_properties:
             # Named by its IRI: the node is not materialized yet, so its repr would fail here.
-            raise OGMDataError(
-                f"Node {self.id!r} data contains OBJECT or COMPLEX properties not defined in ClassSpec {class_spec}: {unknown_properties}",
-                instance_iri=self.id,
-                property_iri=_one_or_none(unknown_properties),
-                class_iri=class_spec.iri,
-            )
+            NodeValidator.refuse(self, unknown_properties)
         known_properties = data_properties & spec_properties
 
         # Check each property against its specification
@@ -240,7 +235,9 @@ class Node:
 
                 domain_instance.class_spec = prop_spec.nested
 
-    def materialize(self, *, reload: bool = False) -> BaseModel:
+    def materialize(
+        self, *, reload: bool = False, refuse_unknown: bool = False
+    ) -> BaseModel:
         """
         Return a validated Pydantic model instance for this node.
 
@@ -254,12 +251,19 @@ class Node:
         If ``reload`` is True, any cached instance is discarded. The nodes data
         is reloaded from the database and a new instance is materialized.
 
+        If ``refuse_unknown`` is True, a property in the data, or in the data of a nested node,
+        that the ClassSpec does not declare raises ``OGMDataError``. The OGM's write paths pass
+        it. Otherwise such a property is logged as a warning and left out of the instance, as
+        the read path needs: a graph may carry more than any schema declares.
+
         Returns:
             BaseModel: A validated Pydantic model corresponding to the nodes
             ClassSpec. The instance is cached on the node.
 
         Raises:
             RuntimeError: If no OGM is attached to load data.
+            OGMDataError: If the data breaks the ClassSpec, for example a property it does not
+                declare when ``refuse_unknown`` is True.
             ValidationError: If the loaded data violates the ClassSpec constraints.
 
         Notes:
@@ -275,7 +279,7 @@ class Node:
             raise RuntimeError("Node has no ClassSpec")
 
         # Validate data
-        NodeValidator.validate(self)
+        NodeValidator.validate(self, refuse_unknown=refuse_unknown)
 
         # Format data for Pydantic
         formatted_data = format_for_instance(self)

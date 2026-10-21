@@ -156,7 +156,9 @@ class ClassSpec:
         # Unknown properties are ignored by design: the model keeps pydantic's default
         # (extra="ignore"). Under the open world a graph may carry more than any schema declares
         # (a comment, the connection metadata of a parameter node), so rejecting unknown keys
-        # would break every fetch of real data. A closed-world validator belongs to SHACL support.
+        # would break every fetch of real data. The write paths refuse an unknown property
+        # before the model is built: create and commit materialize with refuse_unknown=True, and
+        # NodeValidator raises OGMDataError. A closed-world validator belongs to SHACL support.
         # Do not set extra="forbid" here; setting it after create_model has no effect anyway.
 
         # Keep mapping to IRIs for reference
@@ -168,6 +170,20 @@ class ClassSpec:
         setattr(model_cls, "_iri_model_name", self.iri if self.iri else None)
 
         return model_cls
+
+    @staticmethod
+    def declared_properties(class_iri: IRI, ogm: "OGM") -> set[IRI]:
+        """The properties that ``class_iri`` declares itself, whatever a class scope names.
+
+        It reads the store, so a caller asks only where it needs the answer: the write refusal
+        asks when it refuses a property, to tell a property the class does not declare from one
+        that the scope leaves out."""
+        bindings = (
+            ogm.db.query(_property_discovery_query(class_iri), convert_bindings=True)
+            .get("results", {})
+            .get("bindings", [])
+        )
+        return {binding["property"] for binding in bindings}
 
     @staticmethod
     def _maximum_counts(class_iri: IRI, ogm: "OGM") -> Dict[IRI, int]:
@@ -247,6 +263,7 @@ class ClassSpec:
         class_scope: Optional[ClassScope] = None,
         *,
         _path: tuple[IRI, ...] = (),
+        _known_types: Optional[list[IRI]] = None,
     ) -> ClassSpec:
         """
         create a ClassSpec for the given IRI by analyzing the ClassScope, its RDF data in the triple store via the OGM instance.
@@ -266,6 +283,8 @@ class ClassSpec:
             hydration_level: Whether to include all immediate properties or not
             _path: The classes being specified above this one, from the root. Internal to
                 the recursion.
+            _known_types: The class's rdf:type values, when the caller has read them
+                already. Internal.
 
         Returns:
             A ClassSpec instance representing the class specification"""
@@ -273,8 +292,13 @@ class ClassSpec:
 
         ### Collect special properties
         # Get all types of the class
-        triples = db.triples_get(sub=class_iri, pred="rdf:type", include_implicit=True)
-        class_types = [triple[2] for triple in triples]
+        if _known_types is not None:
+            class_types = _known_types
+        else:
+            triples = db.triples_get(
+                sub=class_iri, pred="rdf:type", include_implicit=True
+            )
+            class_types = [triple[2] for triple in triples]
         if not class_types:
             raise OGMOntologyError(
                 f"Class {class_iri} has no rdf:type defined.", class_iri=class_iri

@@ -66,6 +66,7 @@ def state_spec() -> ClassSpec:
 def store() -> Mock:
     db = Mock(spec=TripleStore)
     db.iri_exists.return_value = False
+    db.query.return_value = {"results": {"bindings": []}}
     return db
 
 
@@ -175,7 +176,7 @@ class TestNothingIsWritten:
     ):
         """The data does not fit the class, so the call raises the ``ValueError`` that names
         the property, not an error from describing the half-built node."""
-        with pytest.raises(ValueError, match="not defined in ClassSpec"):
+        with pytest.raises(ValueError, match="does not declare"):
             ogm.commit(
                 changes=[
                     Create(

@@ -1,5 +1,110 @@
 # Changelog
 
+## 0.3.2 — 2026-10-21
+
+- **kapps_ogm requires kapps-triplestore-interface 2.2.2 or later within 2.2**
+  (`kapps-triplestore-interface~=2.2.2`). It is the release this version is tested against.
+
+- **A property whose range is a datatype is read as a literal property, and keeps the literal's
+  datatype.** A named `rdfs:range` that is `rdfs:Literal`, a datatype the store declares
+  `rdf:type rdfs:Datatype` (a Gaussian mixture's, for example), or an XSD or RDF datatype without
+  a python type (`xsd:gMonth`, `rdf:langString`) gives a literal property with no fixed python
+  type, where it was taken for a class and failed ("is not an OWL/RDFS Class") or became an
+  object link. A value given as an `rdflib.Literal` is written and read back with its datatype;
+  a plain string is written as `xsd:string`. The datatype is asked for before the class, since a
+  store with inference also types it `rdfs:Class`. A range of a datatype in a property chain is
+  refused as any literal range is. A restriction target keeps its behaviour.
+
+- **`PropertyOutsideScopeError`.** `create`, and a `Create` of `commit`,
+  that carry a property which the class declares but the given class scope leaves out raise it,
+  before anything is written. Before, such a write failed with the message that the class does not
+  declare the property, which was false. It is a subclass of `OGMDataError`, so existing handlers
+  still catch it; `instance_iri` (the nested node, if the property is nested), `property_iri`,
+  `class_iri` and the new `scope` attribute name the case. A property that the class
+  does not declare keeps the plain `OGMDataError`. The class's own properties are read only when a
+  property is refused. A commit within its scope writes as before, and `Update`, which derives its
+  scope from its data, cannot raise it. An anonymous node has no class IRI to ask, so it keeps the
+  plain error, with a message that says the class does not declare the property or the scope
+  leaves it out.
+
+- **`create` and `commit` refuse a property the class does not declare.** A data object that names
+  one, at the top level or in a nested value, raises `OGMDataError` before anything is written,
+  on `create`, on a `Create` and on an `Update`. The error names the instance, the property and
+  the class (`instance_iri`, `property_iri`, `class_iri`). Before, `create` dropped an unknown
+  literal property with a warning, so a misspelled property lost its value silently, while
+  `commit` raised. A caller that wrote an undeclared property through `create` now gets the
+  error, and must remove the property or declare it in the ontology. Reads stay tolerant: a
+  fetch still ignores a statement its class does not declare and warns, because a graph may
+  carry more than any schema declares. The refusal is separate from `strict`, which the write
+  paths never pass: minimum counts stay unenforced on write. The warning for undeclared data now
+  also fires when the data lacks some declared property; before, it was silent in that case.
+
+- **`OGM.delete` is deprecated.** An individual is never deleted: a property is retracted with
+  `commit`. `delete` only ever raised "not yet implemented", which read as pending work. The entry
+  point is now the private `_delete`, which raises `NotImplementedError` and says why. `delete`
+  stays for one release as an alias that warns with a `DeprecationWarning` and raises the same
+  error.
+
+- **Tests:** two live tests prove that a refused `create` and a refused `commit` leave the stored
+  statements unchanged, and that a class scope written for a superclass also covers a subclass
+  declared after the scope exists, with a negative control that can fail.
+
+- **Documentation:** the README's "Links" example passes a class scope, the error table lists a
+  count above the maximum under pydantic's error, the commit paragraph says which values a read
+  gets inferred and which explicit, and the `OGM` class has its docstring.
+
+- **Fixed:** the validator's two literal type checks name the values that the check itself found.
+  Both messages named the loop variable of another branch: with no object-valued property visited
+  first, the check crashed with an internal error instead of the data error, also on the warning
+  path of `owl:someValuesFrom` without strict. Now a value outside the `owl:allValuesFrom` datatype
+  is refused with a message that names every offending value with its type, and a property with
+  no value in the `owl:someValuesFrom` datatype gets a warning (a refusal in strict validation)
+  that names the types of its values. The messages keep their "expected owl:...From" prefix; the
+  error type and its attributes, `value` included, are unchanged.
+
+- **A validation sends no request to the store.** The check "Node IRI is known but is not an
+  instance of ClassSpec" is removed. It never fired: it asked the store whether the IRI is known
+  in all three positions of a triple at once, which never holds for an instance. Fixed, it would
+  have been wrong, since it tested `rdfs:subClassOf` where `rdf:type` is meant, and it would have
+  refused every existing instance. It cost one read per validation. A create onto an existing IRI
+  is still refused by the write's absent-subjects precondition, and a commit or a materializing
+  fetch takes the class of an instance from the store. Every other rule, warning and refusal
+  stays. The OGM no longer calls `iri_exists` or `is_subclass`.
+
+- **`Append` adds one value to a property of a stored instance**. It is a change
+  of `OGM.commit`, beside `Create` and `Update`, and is exported from `kapps_ogm`. The property's
+  other values stay as they are and are not read. A call whose changes are all appends sends one
+  `INSERT DATA`, so two writers that append to one property at the same moment both land. In a
+  call with a `Create` or an `Update`, the appended triples go into the call's one
+  `DELETE/INSERT`. Before the write, an append is refused if the class of the instance does not
+  have the property (`OGMDataError`), if the value does not fit the range
+  (`pydantic.ValidationError`), or if it would go over the property's maximum count
+  (`OGMDataError`); only a bounded property's stored values are read for that. An object value is
+  a link; a value with properties is refused (`OGMUsageError`). An anonymous-node value is always a
+  new node under a minted Skolem IRI. Several appends may name one instance; an append and another
+  change of one instance are refused, as two changes of one instance are.
+
+- **Fixed:** `create`, and a `Create` of `commit`, derive the class scope from the data when no
+  scope is given and no loader gives one, as `commit` does for an update. Before, they hydrated
+  the class with an empty scope: literal values were dropped without an error, so only the
+  type triple was written, and nested data failed with an error about properties not defined
+  in the ClassSpec. A caller that created literal-only data without a scope now writes its
+  literals too. A given scope, or a loader's, still wins. Data with properties whose
+  scope cannot be derived raises an `OGMUsageError` that names the missing class scope.
+
+- **Fixed:** `create` and `commit` with `data={}` no longer raise an `IndexError`. The scope of
+  empty data is empty: `create` writes the instance with its type, and `commit` changes nothing.
+
+- **Fixed:** a nested class at the REFERENCE level, which is the level of a hand-built
+  `ClassSpec` with none set, is a link to every reader, as an IRI-only link is. The field of an
+  object property no longer reads the nested class's level: its properties decide. `create` writes
+  only the triple that points at the linked instance, for an IRI and for an id-only dictionary.
+  Before, it wrote a string literal that spelled out the dictionary, and a materializing `fetch`
+  put a dictionary into the field. A materializing `fetch` now gives a model that holds only the
+  linked instance's id, and blank-instance generation gives the same. This qualifies the 0.3.0
+  line "Before, it raised `ValueError`": for a nested class at the REFERENCE level, the
+  id-dictionary form already wrote the literal.
+
 ## 0.3.1 — 2026-10-16
 
 - **The type of an OGM error tells the caller what to do.** The OGM's own errors have one base,
@@ -109,7 +214,9 @@
   when the class scope hydrates its class. A nested value with properties is created with its
   parent. Before, a hydrated class decided: a link wrote the linked instance's types, and so the
   first measurement on an existing object was not written. An `IRI` as the value of an object
-  property now means the same as `{"id": iri}`. Before, it raised `ValueError`.
+  property now means the same as `{"id": iri}`. Before, it raised `ValueError`. (Not for a nested
+  class at the REFERENCE level: there the id-dictionary form already wrote a literal; see the
+  fix under Unreleased.)
 - README section "What create and commit promise".
 
 ### Changed
@@ -225,7 +332,7 @@ true — this is usable, several projects run against it, and the API may still 
 
 - **`PropertySpec.specify()` now merges anonymous `rdfs:range` restrictions across the `rdfs:subPropertyOf*` chain, implementing the conjunctive semantics RDFS entails.** Two defects, which RDFS makes one problem: ranges asserted on an interface superproperty were invisible to the OGM, and multiple `rdfs:range` assertions on one property raised `ValueError: Property ... has multiple independent rdfs:range defined`. RDFS ranges are conjunctive — several assertions mean the value must satisfy all of them, their intersection — so refusing them was an incorrect reading of the specification, not a deliberate restriction. The merge is an entailment, not a convention: `belt tu:hasConveyorSpeed _:b` (asserted), `tu:hasConveyorSpeed rdfs:subPropertyOf inf:isInterfaceAccessibleMQTTParameter` (asserted) entails `belt inf:isInterfaceAccessibleMQTTParameter _:b` (rdfs7); `inf:isInterfaceAccessibleMQTTParameter rdfs:range C_mqtt` entails `_:b rdf:type C_mqtt` (rdfs3); `tu:hasConveyorSpeed rdfs:range C_speed` entails `_:b rdf:type C_speed` (rdfs3); therefore `_:b rdf:type (C_speed ⊓ C_mqtt)`. The value node **is** an instance of the intersection, and the OGM computing it implements an entailment the reasoner does not materialise. Measured: GraphDB materialises **0** inherited ranges even with `include_implicit=True`, so range-on-superproperty could not work by inheritance and had to be resolved explicitly by walking `rdfs:subPropertyOf*` in SPARQL.
 
-  The cost to scenario 3 was observable on every `fetch(materialize=True)` of a parameter node: `WARNING kapps_node_validator: Unknown properties in data for ClassSpec None: {hasMQTTBrokerIP, hasMQTTTopic, hasMQTTSetTopic, accessMode}`. Four of the five triples on the node were invisible to the effective shape. `inf:accessMode` was worse than undeclared: it is declared on the interface superproperty `inf:isInterfaceAccessibleParameter`, two levels up the chain, so it was **unreachable** until the walk was added. This also forced a documented ADR violation — `examples/seed.py:_attach_connection_metadata` in `EHoffm/kapps_semantic_middleware` wrote topic, set topic and broker with a raw SPARQL `INSERT`, flagged in its own docstring as an exception to root ADR 0008 because the write path serialised only what the range restriction declared. Verified live against the institute's GraphDB, repository `Tests`, on 2026-07-28: `tu:hasConveyorSpeed` now resolves one COMPLEX spec whose nested anonymous `ClassSpec` declares all six of `inf:hasValue` (float), `tu:hasUnit`, `inf:hasMQTTTopic`, `inf:hasMQTTBrokerIP`, `inf:hasMQTTSetTopic` and `inf:accessMode` (all string); a scoped `fetch(materialize=True)` of `tui:ConveyorBelt1_left` returns the topic, set topic, broker IP and access mode in the parameter node's data and logs no validator warning.
+  The cost to scenario 3 was observable on every `fetch(materialize=True)` of a parameter node: `WARNING kapps_node_validator: Unknown properties in data for ClassSpec None: {hasMQTTBrokerIP, hasMQTTTopic, hasMQTTSetTopic, accessMode}`. Four of the five triples on the node were invisible to the effective shape. `inf:accessMode` was worse than undeclared: it is declared on the interface superproperty `inf:isInterfaceAccessibleParameter`, two levels up the chain, so it was **unreachable** until the walk was added. This also forced a documented exception to the rule that values are written through the mapper: `examples/seed.py:_attach_connection_metadata` in `EHoffm/kapps_semantic_middleware` wrote topic, set topic and broker with a raw SPARQL `INSERT`, flagged in its own docstring as that exception, because the write path serialised only what the range restriction declared. Verified live against the institute's GraphDB, repository `Tests`, on 2026-07-28: `tu:hasConveyorSpeed` now resolves one COMPLEX spec whose nested anonymous `ClassSpec` declares all six of `inf:hasValue` (float), `tu:hasUnit`, `inf:hasMQTTTopic`, `inf:hasMQTTBrokerIP`, `inf:hasMQTTSetTopic` and `inf:accessMode` (all string); a scoped `fetch(materialize=True)` of `tui:ConveyorBelt1_left` returns the topic, set topic, broker IP and access mode in the parameter node's data and logs no validator warning.
 
   Because ranges can now arrive from multiple levels of the chain, conflict rules are defined where previously the code simply refused the case:
 
@@ -240,7 +347,7 @@ true — this is usable, several projects run against it, and the API may still 
 
   The subsumption filter (commit `3a86137`) is narrowed to named ranges: it now carries an `isIRI(?sub) && isIRI(?obj)` guard. It exists to pick the most specific *named* class; without the guard it could discard an anonymous restriction range and silently drop half a merge. A cross-product defect is fixed in passing: when a property's `rdfs:range` was a bare `owl:Restriction` rather than an `owl:Class` with `owl:intersectionOf`, both structural `OPTIONAL`s in `_specify_complex_property`'s query failed, `?restriction` stayed unbound, and the following `OPTIONAL { ?restriction owl:onProperty ?onProperty }` matched **every restriction in the repository**. Binding `?restriction` in a `UNION` before the detail `OPTIONAL`s removes it. Walking the chain made fixing it necessary, since it multiplies the number of ranges reaching that query. The structural metadata (`unionOf`, `complementOf`, `oneOf`) moved to its own query for the same reason: reading it off "the first binding" is meaningless once several ranges contribute. The walk uses the SPARQL property path `rdfs:subPropertyOf*`, evaluated as a transitive closure, so a cyclic `rdfs:subPropertyOf` assertion terminates by construction rather than needing a guard in Python.
 
-  Requiredness is deliberately untouched: `owl:someValuesFrom` still sets `min_count = 1`. That it must not, under the Open World Assumption, is open work. The merge as implemented cannot make a shape harder to satisfy than its most restrictive part, which is the constraint that open work places on this change. The specification of record is requirement **R7** of `kapps_semantic_middleware`'s anonymous-node-identity PRD, and its root ADR 0002 records the RDFS reading. Both are development-repository records and neither ships here. This unblocks two further fixes that could not land while every fetch of real data carried undeclared properties.
+  Requiredness is deliberately untouched: `owl:someValuesFrom` still sets `min_count = 1`. That it must not, under the Open World Assumption, is open work. The merge as implemented cannot make a shape harder to satisfy than its most restrictive part, which is the constraint that open work places on this change. The specification of record is requirement **R7** of `kapps_semantic_middleware`'s anonymous-node-identity PRD, and the reading of `rdfs:range` that it builds on is recorded there too. Both are development-repository documents and neither ships here. This unblocks two further fixes that could not land while every fetch of real data carried undeclared properties.
 
 - **A nested property's `value_kind` was inferred from the *presence* of `owl:someValuesFrom` / `owl:allValuesFrom` rather than from what the keyword points at, so every restriction was assumed to constrain a literal.** `owl:allValuesFrom xsd:string` constrains a literal; `owl:allValuesFrom cfc:Unit` constrains an object, and both are legal OWL. `XSDToPythonTypes` is a plain `dict` and both lookups used `[]`, so a class target raised `KeyError` carrying nothing but the IRI — a poor diagnostic for a domain engineer who wrote a legal restriction. The intended fallback was **dead code**: the `someValuesFrom` branch already read `if range_type: ... else: nested_spec.some_from = range_iri`, which says exactly the right thing, but the `[]` lookup on the line above raised first so the `else` could never run; the intent was `.get()`. The codebase contradicted itself — `to_pydantic_field`'s LITERAL branch already raised `"Literal property ... cannot have allValuesFrom as Object IRI"`, so one site assumed class targets impossible while another explicitly rejected them.
 
@@ -252,7 +359,7 @@ true — this is usable, several projects run against it, and the API may still 
 
   Zero non-XSD `some`/`allValuesFrom` restrictions exist in either live GraphDB repository (`Tests`, `OGM`), measured 2026-07-28, so no current data changes behaviour. This is a correctness fix, not a migration. Note also that the `isinstance(self.all_from, IRI)` guard in `to_pydantic_field` is deliberately retained: it becomes unreachable from `specify` but still guards a hand-built `PropertySpec`, and an existing test depends on it. `min_count = 1` on `owl:someValuesFrom` is untouched; that it should not be, under the Open World Assumption, remains open work.
 
-  The defect was found in the design session for the range merge in the previous entry, whose `rdfs:subPropertyOf*` walk is what widened its blast radius — a restriction on any *ancestor* can now reach it, not only one on the property itself. Root ADR 0001 of `EHoffm/kapps_semantic_middleware` is what requires this entry.
+  The defect was found in the design session for the range merge in the previous entry, whose `rdfs:subPropertyOf*` walk is what widened its blast radius — a restriction on any *ancestor* can now reach it, not only one on the property itself. That project's rule on where a bug fix is recorded requires this entry.
 
 - **Anonymous nodes lost their identity on every write; they are now Skolemised.** The
   anonymous node behind a `COMPLEX` property — every parameter node in the Circular Factory
@@ -352,7 +459,7 @@ true — this is usable, several projects run against it, and the API may still 
   equal-length list is still undetectable from position alone; that is a known limitation and
   cannot arise until one property carries two or more anonymous nodes, which no current domain
   model does. Closing it wants content-based matching, and probably the range merge first — under the locator
-  pattern (ADR 0024) two sibling parameter nodes carry a unit and metadata but no value, so they
+  pattern, two sibling parameter nodes carry a unit and metadata but no value, so they
   are frequently content-identical and ties are the normal case rather than the edge case.
 
   On the namespace: Ratan settled the minting authority as `w3id.org/circularfactory`, which is
@@ -527,7 +634,7 @@ true — this is usable, several projects run against it, and the API may still 
 
   **Reported/fixed by:** the `kapps_semantic_middleware` project, which depends on
   `kapps_ogm` as a local editable dependency and hit this on its first real
-  fetch/commit. Per that project's dependency-and-bugfix policy — its root ADR 0001,
-  a development-repository record that does not ship here — genuine correctness bugs
+  fetch/commit. Per that project's dependency-and-bugfix policy,
+  which is a development-repository document that does not ship here, genuine correctness bugs
   in sibling dependency repos are fixed directly in the sibling, with a detailed
   changelog entry. This is that entry.

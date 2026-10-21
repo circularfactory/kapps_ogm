@@ -162,16 +162,15 @@ class TestACreateOfCommit:
         kwargs = store.triples_update.call_args.kwargs
         assert set(kwargs["absent_subjects"]) == {M2, OBJ2, other}
 
-    def test_the_existence_is_not_read_before_the_write(self, ogm, store):
+    def test_nothing_is_read_before_the_write(self, ogm, store):
         ogm.commit(
             changes=[
                 Create(class_iri=MEASUREMENT, data={str(VALUE): [1.5]}, instance_iri=M2)
             ]
         )
 
-        store.iri_exists.assert_called_once_with(
-            M2, as_sub=True, as_pred=True, as_obj=True
-        )
+        store.iri_exists.assert_not_called()
+        store.is_subclass.assert_not_called()
 
 
 class RefusalOfASubclass(PreconditionFailedError):

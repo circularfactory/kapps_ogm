@@ -18,6 +18,7 @@ from .errors import (
     OGMOntologyError,
     OGMUsageError,
     OGMUsageTypeError,
+    PropertyOutsideScopeError,
     UnresolvableNodeAddressError,
 )
 from .skolem import (
@@ -43,6 +44,7 @@ __all__ = [
     "OGMNotFoundError",
     "OGMUsageError",
     "OGMUsageTypeError",
+    "PropertyOutsideScopeError",
     "AmbiguousNodeAlignmentError",
     "AnonymousNodeFetchError",
     "UnresolvableNodeAddressError",

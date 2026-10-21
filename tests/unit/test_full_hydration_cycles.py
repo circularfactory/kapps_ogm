@@ -330,10 +330,22 @@ class TestTheReadersTakeAnIriOnlyLink:
     def ogm(self, store: StoreStub) -> OGM:
         return OGM(db=store)
 
-    @pytest.fixture
-    def task(self, ogm: OGM, v: dict[str, IRI]) -> ClassSpec:
+    @pytest.fixture(params=["scope", "reference", "no-level"])
+    def task(self, request, ogm: OGM, v: dict[str, IRI]) -> ClassSpec:
+        """The OGM's own specification, and two with the link built by hand: at the REFERENCE
+        level, and with no level set, which is the REFERENCE level."""
         task = full(ogm, v["Task"])
         assert nested(task, v["hasReferenceTask"]) == iri_only_link(v["Task"])
+        if request.param == "reference":
+            link = ClassSpec(
+                iri=v["Task"], hydration_level=ClassHydrationLevel.REFERENCE
+            )
+        elif request.param == "no-level":
+            link = ClassSpec(iri=v["Task"])
+        else:
+            return task
+        assert link.hydration_level is ClassHydrationLevel.REFERENCE
+        task.properties[v["hasReferenceTask"]].nested = link
         return task
 
     def test_the_read_path(self, ogm: OGM, v: dict[str, IRI], task: ClassSpec):

@@ -17,12 +17,22 @@ from kapps_triplestore_interface import IRI
 from kapps_triplestore_interface.exceptions import TripleStoreInterfaceError
 from kapps_ogm.node.core import Node
 from kapps_ogm.mapping.class_spec import ClassSpec
-from kapps_ogm.mapping.property_spec import PropertySpec
+from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 
 from .conftest import (
     TRANSFER_UNIT_IRI,
     INSTANCE_IRI,
 )
+
+
+def label_properties() -> dict:
+    """The properties of a class that declares ``rdfs:label``: create refuses an undeclared one."""
+    label = IRI("rdfs:label")
+    return {
+        label: PropertySpec(
+            iri=label, value_kind=PropertyValueKind.LITERAL, python_range_type=str
+        )
+    }
 
 
 class TestOGMCreate:
@@ -36,7 +46,7 @@ class TestOGMCreate:
 
         mock_class_spec = Mock(spec=ClassSpec)
         mock_class_spec.iri = TRANSFER_UNIT_IRI
-        mock_class_spec.properties = {}
+        mock_class_spec.properties = label_properties()
 
         # Mock Pydantic model
         mock_model_cls = Mock()
@@ -56,9 +66,7 @@ class TestOGMCreate:
         assert isinstance(node, Node)
         assert node.id == INSTANCE_IRI
         assert node.data == data
-        mock_db.iri_exists.assert_called_once_with(
-            INSTANCE_IRI, as_sub=True, as_pred=True, as_obj=True
-        )
+        mock_db.iri_exists.assert_not_called()
         assert node.instance == mock_instance
 
     def test_create_with_id_in_data(self, ogm_with_mock_db, mock_db):
@@ -71,7 +79,7 @@ class TestOGMCreate:
 
         mock_class_spec = Mock(spec=ClassSpec)
         mock_class_spec.iri = TRANSFER_UNIT_IRI
-        mock_class_spec.properties = {}
+        mock_class_spec.properties = label_properties()
 
         mock_model_cls = Mock()
         mock_instance = Mock(spec=BaseModel)
@@ -99,7 +107,7 @@ class TestOGMCreate:
 
         mock_class_spec = Mock(spec=ClassSpec)
         mock_class_spec.iri = TRANSFER_UNIT_IRI
-        mock_class_spec.properties = {}
+        mock_class_spec.properties = label_properties()
 
         mock_model_cls = Mock()
         mock_instance = Mock(spec=BaseModel)
@@ -123,7 +131,7 @@ class TestOGMCreate:
         data = {"invalid_field": ["bad_value"]}
 
         mock_class_spec = Mock(spec=ClassSpec)
-        mock_class_spec.properties = {}
+        mock_class_spec.properties = label_properties()
 
         # Mock Pydantic model that raises ValidationError
         mock_model_cls = Mock(
@@ -155,6 +163,7 @@ class TestOGMCreate:
     ):
         """Test that a write the store refuses reaches the caller as the store's own error."""
         mock_db.triples_add.side_effect = store_error
+        simple_class_spec.properties = label_properties()
         simple_class_spec.to_pydantic_model.return_value = Mock()
         data = {IRI("rdfs:label"): ["Test Unit"]}
 
@@ -177,6 +186,7 @@ class TestOGMCreate:
         class RequiresAField(BaseModel):
             required_field: int
 
+        simple_class_spec.properties = label_properties()
         simple_class_spec.to_pydantic_model.return_value = RequiresAField
         data = {IRI("rdfs:label"): ["Test Unit"]}
 

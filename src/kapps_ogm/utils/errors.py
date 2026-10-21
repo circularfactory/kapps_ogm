@@ -68,6 +68,42 @@ class OGMDataError(OGMError, ValueError):
         self.value = value
 
 
+class PropertyOutsideScopeError(OGMDataError):
+    """The class declares the property, but the class scope leaves it out. Action: Refused.
+
+    A write is confined to its class scope, so it cannot write the property. Add the property to
+    the scope, or remove it from the data. A subclass of ``OGMDataError``: a handler of data
+    errors catches it. A property that the class does not declare at all raises plain
+    ``OGMDataError`` instead.
+
+    Attributes:
+        instance_iri: The instance, or the nested node, whose data carries the property.
+        property_iri: The property that the class declares and the scope leaves out.
+        class_iri: The class of that instance.
+        value: The value or values of the property, when known.
+        scope: The properties that the scope names for the class, sorted.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        instance_iri: Optional[IRI] = None,
+        property_iri: Optional[IRI] = None,
+        class_iri: Optional[IRI] = None,
+        value: Any = None,
+        scope: Iterable[IRI] = (),
+    ):
+        super().__init__(
+            message,
+            instance_iri=instance_iri,
+            property_iri=property_iri,
+            class_iri=class_iri,
+            value=value,
+        )
+        self.scope = tuple(sorted(scope))
+
+
 class OGMOntologyError(OGMError, ValueError):
     """The ontology has a shape that the OGM cannot map. Action: Repair.
 

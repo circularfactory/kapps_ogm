@@ -17,17 +17,14 @@ def _blank_value_for_property(ogm: "OGM", prop: PropertySpec) -> Any:
     """
     Produce a blank value for a property based on its kind and hydration.
     - data/literal: None
-    - object: nested blank instance if hydrated, else None (IRI placeholder)
+    - object: nested blank instance if there is a nested class, else None (IRI placeholder)
     - complex: requires hydrated nested ClassSpec; returns nested blank instance
     """
     if prop.value_kind is PropertyValueKind.LITERAL:
         return None
 
     if prop.value_kind is PropertyValueKind.OBJECT:
-        if (
-            prop.nested
-            and not prop.nested.hydration_level is ClassHydrationLevel.REFERENCE
-        ):
+        if prop.nested:
             return _blank_instance_from_class_spec(ogm, class_spec=prop.nested)
         return None  # unresolved object → IRI placeholder
 

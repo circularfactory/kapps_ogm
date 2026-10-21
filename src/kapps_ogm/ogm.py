@@ -3,11 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, Sequence, Union, cast, overload
 import logging
+import warnings
 import pydantic as pd
-from rdflib import BNode
+from rdflib import BNode, Literal
 
 from kapps_triplestore_interface import IRI, SPARQLQuery, TripleStore
-from kapps_triplestore_interface.utils.types import GraphNameLike, SubjectLike
+from kapps_triplestore_interface.utils.types import (
+    GraphNameLike,
+    IRILike,
+    SubjectLike,
+)
 
 from kapps_ogm.node.core import Node
 from kapps_ogm.node.node_address import reconcile_anonymous_addresses
@@ -18,6 +23,7 @@ from kapps_ogm.utils.loader_strategy import LoaderStrategy
 from kapps_ogm.utils.class_scope import ClassScope
 from kapps_ogm.utils.errors import (
     AnonymousNodeFetchError,
+    OGMDataError,
     OGMNotFoundError,
     OGMUsageError,
     OGMUsageTypeError,
@@ -28,6 +34,11 @@ from kapps_ogm.utils.skolem import (
     is_skolem_iri,
     mint_skolem_iri,
     validate_skolem_namespace,
+)
+
+_DELETION_MESSAGE = (
+    "An individual is never deleted. Retract its properties with commit(); "
+    "the entry point is kept for a later extension."
 )
 
 
@@ -65,7 +76,31 @@ class Update:
     data: dict
 
 
-Change = Union[Create, Update]
+@dataclass(frozen=True)
+class Append:
+    """One value added to a property of a stored instance, written by OGM.commit
+    together with the other changes of one call.
+
+    The other values of the property stay as they are: an append neither reads nor rewrites
+    them. The value is validated as a commit's value is. The instance must be one that the store
+    holds already; a value of an instance that a ``Create`` of the same call makes goes into that
+    ``Create``.
+
+    Args:
+        instance_iri: IRI of the stored instance
+        property_iri: IRI of the property, which the class of the instance must have
+        value: The value, as in the data of a commit: a literal for a datatype property; an IRI
+            or ``{"id": iri}`` for an object property, which writes the link and nothing about
+            the linked instance; a dictionary of the node's properties, without an ``id``, for
+            an anonymous node, which is always a new node under a minted Skolem IRI.
+    """
+
+    instance_iri: IRI
+    property_iri: IRI
+    value: Any
+
+
+Change = Union[Create, Update, Append]
 
 RDF_TYPE = IRI("rdf:type")
 
@@ -88,9 +123,97 @@ def _described_instances(triples: set) -> set[IRI]:
     }
 
 
-class OGM:
+def _python_form(term: Any) -> Any:
+    """A triple's object in the form the store's reads give it: a literal as its python value."""
+    return term.toPython() if isinstance(term, Literal) else term
+
+
+class _BoundedValues:
+    """The maximum count of the properties that the appends of one commit write.
+
+    An unbounded property is never read. For a bounded one, the stored values are read once per
+    instance and property with ``triples_get``, as a fetch reads them (inferred values included),
+    and each appended value that is not among them counts as one more. The read and the write are
+    two requests: another writer can add a value between them, so two appends at one moment can
+    go over the bound together. An invariant under concurrent writers belongs in a SHACL shape.
     """
-    TODO: Docstring for OGM
+
+    def __init__(self, db: TripleStore):
+        self.db = db
+        self.values: dict[tuple[IRI, IRI], set] = {}
+
+    def add(self, node: Node, property_spec: PropertySpec, added: set) -> None:
+        """Count the values ``added`` gives to the property of ``node``; raise over the bound."""
+        maximum = property_spec.max_count
+        if maximum is None:
+            return
+        instance_iri = cast(IRI, node.id)
+        property_iri = IRI(property_spec.iri)
+        values = self.values.get((instance_iri, property_iri))
+        if values is None:
+            values = {
+                _python_form(triple[2])
+                for triple in self.db.triples_get(sub=instance_iri, pred=property_iri)
+            }
+            self.values[(instance_iri, property_iri)] = values
+        stored = len(values)
+        values.update(
+            _python_form(obj)
+            for subject, predicate, obj in added
+            if subject == instance_iri and IRI(predicate) == property_iri
+        )
+        if len(values) > maximum:
+            raise OGMDataError(
+                f"{property_iri} of {instance_iri} takes at most {maximum} values. The store "
+                f"holds {stored}, and the appends would make it {len(values)}.",
+                instance_iri=instance_iri,
+                property_iri=property_iri,
+                class_iri=node.class_spec.iri if node.class_spec else None,
+            )
+
+
+def _carrier_iri(
+    root: Node, chain: Sequence[IRI], property_iri: Optional[IRI]
+) -> Optional[IRI]:
+    """The IRI of the node in ``root``'s data that carries ``property_iri``.
+
+    ``chain`` is the property chain from ``root`` to the class whose scope refused the property.
+    The nodes at its end whose data holds ``property_iri`` carry it; with no ``property_iri``
+    (several properties refused at once), each node at its end that has data counts. The IRI is
+    given only when exactly one node carries the property and it has an IRI, and otherwise None.
+    """
+    nodes = [root]
+    for prop in chain:
+        nodes = [
+            child
+            for node in nodes
+            for child in (node.data or {}).get(IRI(prop), [])
+            if isinstance(child, Node)
+        ]
+    carriers = [
+        node
+        for node in nodes
+        if node.data and (property_iri is None or IRI(property_iri) in node.data)
+    ]
+    if len(carriers) == 1 and isinstance(carriers[0].id, IRI):
+        return carriers[0].id
+    return None
+
+
+class OGM:
+    """The object-graph mapper: instance data of a triple store as pydantic models.
+
+    The shape of each model is derived from the ontology in the store at the time of the call:
+    the declared properties of the class, their ranges, and the maximum number of values from
+    the class's restrictions and the functional properties. Nothing is generated ahead of time,
+    and the mapper keeps no state between calls beyond its store, its optional loader, its
+    naming schema and its Skolem namespace.
+
+    ``create`` writes a new instance, ``fetch`` reads one under a class scope, and ``commit``
+    sends the difference between a data object and the stored instance as one atomic update.
+    A write refuses a data object that names a property its class does not declare; a read
+    ignores such a statement of the graph and warns. An instance is never deleted; a property
+    is retracted with ``commit``.
     """
 
     def __init__(
@@ -123,6 +246,14 @@ class OGM:
     # Schema orchestration
     # ------------------------------------------------------------------
 
+    def _given_or_loader_scope(
+        self, class_iri: IRI, class_scope: Optional[ClassScope]
+    ) -> Optional[ClassScope]:
+        """The given class scope, else the loader's. An empty scope counts as none."""
+        if class_scope:
+            return class_scope
+        return self.loader.expand(class_iri) if self.loader else None
+
     def get_class_spec(
         self,
         *,
@@ -135,9 +266,7 @@ class OGM:
 
         ClassScope defines selective hydration of nested properties.
         """
-        class_scope = class_scope or (
-            self.loader.expand(class_iri) if self.loader else None
-        )
+        class_scope = self._given_or_loader_scope(class_iri, class_scope)
         self.logger.debug(
             "Resolving ClassSpec for %s (chain=%s, hydration_level=%s)",
             class_iri,
@@ -152,6 +281,33 @@ class OGM:
             hydration_level=hydration_level,
         )
         return spec
+
+    def _data_class_spec(
+        self,
+        node: Node,
+        class_iri: IRI,
+        class_scope: Optional[ClassScope],
+    ) -> ClassSpec:
+        """The ClassSpec of ``class_iri`` in ``class_scope``, for the data of ``node``.
+
+        A scope built from data, or given with it, can name a property that the class does not
+        declare. The class specification refuses that while it is built, with an error that does
+        not know the instance. The error that leaves here names the instance whose data carries
+        the property, which may be a nested one."""
+        try:
+            return self.get_class_spec(
+                class_iri=class_iri,
+                class_scope=class_scope,
+                hydration_level=ClassHydrationLevel.SCOPE,
+            )
+        except OGMDataError as error:
+            if error.instance_iri is None:
+                error.instance_iri = _carrier_iri(
+                    node,
+                    getattr(error, "_scope_chain", ()),
+                    error.property_iri,
+                )
+            raise
 
     # ------------------------------------------------------------------
     # Creating new instances
@@ -183,7 +339,9 @@ class OGM:
 
         Args:
             class_iri: IRI of the class to instantiate
-            class_scope: ClassScope defining the class and property structure
+            class_scope: ClassScope defining the class and property structure. Without it,
+                the loader's scope is used, and without a loader the scope is derived from
+                ``data``, as ``commit`` derives it.
             data: Data dictionary for the instance (must conform to the class)
             instance_iri: Optional IRI for the new instance (if not provided, a new one will be generated)
             persist: Whether to persist the new instance to the graph database
@@ -191,10 +349,16 @@ class OGM:
         Returns:
             Node representing the newly created instance
         Raises:
-            OGMDataError: If the data does not fit the class. Refused.
+            OGMDataError: If the data does not fit the class, for example if it names a
+                property that the class does not declare, here or in a nested value. Its
+                ``instance_iri``, ``property_iri`` and ``class_iri`` name the instance, the
+                property and the class. Nothing is written. Refused.
+                A property that the class declares and the class scope leaves out raises the
+                subclass ``PropertyOutsideScopeError``, which also has ``scope``.
             OGMOntologyError: If the ontology has a shape that the OGM cannot map. Repair.
             OGMUsageError: If the call is malformed, for example data that is not a dictionary
-                of lists. Fix the call.
+                of lists, or data with properties and no class scope to give or derive. Fix
+                the call.
             pydantic.ValidationError: If the data does not fit the generated model. It
                 propagates unchanged.
             kapps_triplestore_interface.exceptions.PreconditionFailedError: If an instance it
@@ -243,23 +407,30 @@ class OGM:
         class_scope: Optional[ClassScope],
         instance_iri: Optional[IRI],
     ) -> Node:
-        """A materialized Node for a new instance. Nothing is written."""
-        class_scope = class_scope or (
-            self.loader.expand(class_iri) if self.loader else None
-        )
-        class_spec = self.get_class_spec(
-            class_iri=class_iri,
-            class_scope=class_scope,
-        )
+        """A materialized Node for a new instance. Nothing is written.
 
+        The class scope is the given one, else the loader's, else the one derived from the data,
+        as ``commit`` derives it. An empty scope counts as none."""
+        class_scope = self._given_or_loader_scope(class_iri, class_scope)
+        if not class_scope:
+            class_scope = ClassScope.from_data_dict(data)
+            # Invariant check: every property key yields a chain, so a derived scope is empty
+            # only for data without properties. This guards a later change of the derivation.
+            if not class_scope and any(key != "id" for key in data):
+                raise OGMUsageError(
+                    f"No class scope for the new instance of {class_iri}: none was given, "
+                    "no loader gives one, and none could be derived from the data. "
+                    "Pass class_scope."
+                )
         node = Node(
             id=instance_iri,
-            class_spec=class_spec,
             data=data,
             ogm=self,
         )
+        node.class_spec = self._data_class_spec(node, class_iri, class_scope)
 
-        node.materialize()
+        # A write refuses a property that the class does not declare, before anything is sent.
+        node.materialize(refuse_unknown=True)
         return node
 
     def create_blank_instance(
@@ -279,9 +450,7 @@ class OGM:
         Returns:
             pydantic BaseModel representing the blank instance
         """
-        class_scope = class_scope or (
-            self.loader.expand(class_iri) if self.loader else None
-        )
+        class_scope = self._given_or_loader_scope(class_iri, class_scope)
         return _create_blank_instance(
             ogm=self,
             instance_iri=instance_iri or IRI("urn:uuid:generated-blank-instance"),
@@ -561,9 +730,23 @@ class OGM:
         ``OGM.create`` does: a nested value given by its IRI alone is a link. An empty
         ``changes`` writes nothing.
 
-        The triples to remove come from a full read of the stored instance, inferred triples
-        included. The store removes only explicit triples of the target graph, so it checks the
-        triples to remove against those. A normal return means that the store admitted the
+        ``changes`` may also hold ``Append`` entries. An append adds one value to a property of a
+        stored instance and leaves the property's other values as they are: it neither reads
+        nor rewrites them. Several appends may name one instance, but an append and a
+        ``Create`` or an ``Update`` may not. A call whose changes are all appends sends one
+        request, a single ``INSERT DATA`` without a precondition, so two writers that append to
+        one property at the same moment both land, and an append of a value the store holds
+        already changes nothing. In a call with other changes, the appended triples go into the
+        one ``DELETE/INSERT`` and add nothing to its precondition. Before the write, an append
+        is refused if the class of the instance does not have the property, or if the value
+        does not fit its range. For a property with a maximum count, the stored values are read
+        first, and an append that would go over the maximum is refused; another writer can add
+        a value between that read and the write.
+
+        The triples that an ``Update`` removes come from a full read of the stored instance:
+        inferred triples are included for literal and object properties, and only explicit
+        triples for an anonymous node. The store removes only explicit triples of the target
+        graph, so it checks the triples to remove against those. A normal return means that the store admitted the
         write: each triple to remove was an explicit triple of the target graph, no instance
         to create existed, and the store committed the change. When the data changes nothing,
         nothing is sent, because there is nothing to admit. A triple that is both explicit and
@@ -581,17 +764,28 @@ class OGM:
             named_graph: Optional named graph to persist the changes to
         Returns:
             Node representing the newly updated instance. With ``changes``, a list with one
-            Node for each change, in the same order.
+            Node for each change, in the same order. The Node of an append holds the appended
+            value only, not the property's other values.
         Raises:
             OGMUsageTypeError: If both forms or neither are given, or ``changes`` holds an
-                entry that is not a ``Create`` or an ``Update``. It is a ``TypeError``. Fix the
-                call.
+                entry that is not a ``Create``, an ``Update`` or an ``Append``. It is a
+                ``TypeError``. Fix the call.
             OGMUsageError: With ``changes``, if two changes write the same instance: the
                 instance a change names, or a named instance that its data nests with
-                properties. Types do not count. Fix the call.
-            OGMNotFoundError: If the store holds no class for an instance to update. Refresh.
-                AmbiguousNodeAlignmentError and UnresolvableNodeAddressError are subclasses.
-            OGMDataError: If the data does not fit the class. Refused.
+                properties. Types do not count, and appends to one instance do not conflict.
+                Also for an append that would write about another instance: an object value
+                with properties, or an anonymous node given with an ``id``. Fix the call.
+            OGMNotFoundError: If the store holds no class for an instance to update or to
+                append to. Refresh. AmbiguousNodeAlignmentError and
+                UnresolvableNodeAddressError are subclasses.
+            OGMDataError: If the data does not fit the class, for example if it names a
+                property that the class does not declare, here or in a nested value. Its
+                ``instance_iri``, ``property_iri`` and ``class_iri`` name the instance, the
+                property and the class. Nothing is written. A property that the class declares
+                and a ``Create``'s class scope leaves out raises the subclass
+                ``PropertyOutsideScopeError``. Also if the class of an instance
+                has no property an append names, or an append would go over the property's
+                maximum count. Refused.
             OGMOntologyError: If the ontology has a shape that the OGM cannot map. Repair.
             pydantic.ValidationError: If the data does not fit the generated model. It
                 propagates unchanged.
@@ -634,26 +828,31 @@ class OGM:
         if not changes:
             return []
 
-        named: set[IRI] = set()
+        # Each instance a change names, and whether an append names it. Several appends may
+        # name one instance; any other change must be the only one that names it.
+        named: dict[IRI, bool] = {}
         for change in changes:
-            if not isinstance(change, (Create, Update)):
+            if not isinstance(change, (Create, Update, Append)):
                 raise OGMUsageTypeError(
-                    f"commit() takes Create and Update changes, got {type(change).__name__}"
+                    "commit() takes Create, Update and Append changes, "
+                    f"got {type(change).__name__}"
                 )
             if change.instance_iri is None:
                 continue
             iri = IRI(change.instance_iri)
-            if iri in named:
+            is_append = isinstance(change, Append)
+            if iri in named and not (named[iri] and is_append):
                 raise OGMUsageError(
                     f"Two changes name {iri}. Put all changes to one instance in one change."
                 )
-            named.add(iri)
+            named[iri] = is_append
 
         nodes: list[Node] = []
         old_triples: set = set()
         new_triples: set = set()
         created: set[SubjectLike] = set()
-        writers: dict[IRI, int] = {}
+        writers: dict[IRI, tuple[int, bool]] = {}
+        bounded = _BoundedValues(self.db)
         for index, change in enumerate(changes):
             if isinstance(change, Create):
                 node = self._new_node(
@@ -672,6 +871,10 @@ class OGM:
                         f"Creating instance {node.id}: adding {len(added)} triples:\n\n{format_triples_turtle(added)}",
                     )
                 removed: set = set()
+            elif isinstance(change, Append):
+                node, added, property_spec = self._appended_node(change)
+                bounded.add(node, property_spec, added)
+                removed = set()
             else:
                 node, removed, added = self._changed_node(
                     instance_iri=IRI(change.instance_iri), data=change.data
@@ -680,10 +883,14 @@ class OGM:
             # write one instance would each apply their own diff to it. The guard above sees only
             # the named instances; this one also sees a named instance nested with properties.
             # Types do not count: a link typed by its range states what the instance's own
-            # Create states.
+            # Create states. Appends read no stored state, so several of them write one
+            # instance side by side.
+            is_append = isinstance(change, Append)
             for instance in _described_instances(removed | added):
-                first = writers.setdefault(instance, index)
-                if first != index:
+                first, first_is_append = writers.setdefault(
+                    instance, (index, is_append)
+                )
+                if first != index and not (first_is_append and is_append):
                     raise OGMUsageError(
                         f"Two changes write {instance} (positions {first} and {index}). "
                         "Put all changes to one instance in one change."
@@ -691,6 +898,17 @@ class OGM:
             nodes.append(node)
             old_triples |= removed
             new_triples |= added
+
+        if all(isinstance(change, Append) for change in changes):
+            # Nothing to remove and nothing to check: one INSERT DATA, which the store applies
+            # whatever another writer commits beside it. Inserting a triple the store holds
+            # changes nothing, so the append is idempotent.
+            self.db.triples_add(
+                list(new_triples),
+                check_exist=False,
+                named_graph=named_graph,
+            )
+            return nodes
 
         # triples_update sends one atomic DELETE/INSERT update request, so
         # the removed and added triples are applied together. This is required for
@@ -717,30 +935,7 @@ class OGM:
         """The Node that ``data`` makes of a stored instance, and the triples to remove and to
         add. Nothing is written."""
         new_node = Node(id=instance_iri, data=data, ogm=self)
-
-        class_iri_set = self.db.owl_get_classes_of_individual(instance_iri)
-        if not class_iri_set:
-            raise OGMNotFoundError(
-                f"Could not determine class IRI for instance {instance_iri}",
-                iri=instance_iri,
-            )
-        # The store gives IRIs: only a call with `local_name=True` gives strings.
-        class_iri = cast(IRI, class_iri_set.pop())
-        if class_iri_set:
-            self.logger.warning(
-                "Instance %s has multiple classes, using %s and not %s.",
-                instance_iri,
-                class_iri,
-                class_iri_set,
-            )
-
-        class_scope = ClassScope.from_node_data(new_node)
-        class_spec = self.get_class_spec(
-            class_iri=class_iri,
-            class_scope=class_scope,
-            hydration_level=ClassHydrationLevel.SCOPE,
-        )
-
+        class_spec, class_scope = self._stored_class_spec(new_node)
         new_node.class_spec = class_spec
 
         # Fetch before materializing, so the addresses of the anonymous nodes already in the store
@@ -757,7 +952,7 @@ class OGM:
         )
         reconcile_anonymous_addresses(old=old_node, new=new_node)
 
-        new_node.materialize()
+        new_node.materialize(refuse_unknown=True)
 
         old_triples, new_triples = old_node.diff(other=new_node)
 
@@ -773,22 +968,122 @@ class OGM:
 
         return new_node, old_triples, new_triples
 
+    def _stored_class_spec(self, node: Node) -> tuple[ClassSpec, ClassScope]:
+        """The ClassSpec of the stored instance that ``node`` names, hydrated to the scope of
+        the node's data, and that scope."""
+        instance_iri = cast(IRI, node.id)
+        class_iri_set = self.db.owl_get_classes_of_individual(instance_iri)
+        if not class_iri_set:
+            raise OGMNotFoundError(
+                f"Could not determine class IRI for instance {instance_iri}",
+                iri=instance_iri,
+            )
+        # The store gives IRIs: only a call with `local_name=True` gives strings.
+        class_iri = cast(IRI, class_iri_set.pop())
+        if class_iri_set:
+            self.logger.warning(
+                "Instance %s has multiple classes, using %s and not %s.",
+                instance_iri,
+                class_iri,
+                class_iri_set,
+            )
+
+        class_scope = ClassScope.from_node_data(node)
+        class_spec = self._data_class_spec(node, class_iri, class_scope)
+        return class_spec, class_scope
+
+    def _appended_node(self, change: Append) -> tuple[Node, set, PropertySpec]:
+        """The Node that holds the appended value, the triples to add, and the property's
+        spec. Nothing is read of the stored values, and nothing is written."""
+        instance_iri = IRI(change.instance_iri)
+        property_iri = IRI(change.property_iri)
+        value = change.value
+
+        data: dict[IRILike, list[Any]] = {property_iri: [value]}
+        node = Node(id=instance_iri, data=data, ogm=self)
+        class_spec, _ = self._stored_class_spec(node)
+
+        # A property the class does not have is ignored on materialization (by design), so an
+        # append of one would write nothing and return normally. It is refused here.
+        property_spec = class_spec.properties.get(property_iri)
+        if property_spec is None:
+            raise OGMDataError(
+                f"The class {class_spec.iri} of {instance_iri} has no property {property_iri}, "
+                "so nothing can be appended to it.",
+                instance_iri=instance_iri,
+                property_iri=property_iri,
+                class_iri=class_spec.iri,
+                value=value,
+            )
+        keys = {str(key) for key in value} if isinstance(value, dict) else set()
+        if property_spec.value_kind is PropertyValueKind.OBJECT and keys - {"id"}:
+            raise OGMUsageError(
+                f"An append to {property_iri} links an instance by its IRI and writes nothing "
+                "about it. To make the instance, put a Create of it in the same commit and "
+                "append its IRI."
+            )
+        if property_spec.value_kind is PropertyValueKind.COMPLEX and "id" in keys:
+            raise OGMUsageError(
+                f"An append to {property_iri} makes a new anonymous node, so its value takes no "
+                "id. To change a stored anonymous node, commit an Update of its instance."
+            )
+
+        node.class_spec = class_spec
+        node.materialize(refuse_unknown=True)
+
+        # Only the link and the new anonymous node: the instance's types are stored already.
+        added = {
+            triple
+            for triple in node.to_triples(links_from_data=True)
+            if triple[0] != instance_iri or IRI(triple[1]) == property_iri
+        }
+        if self.logger.isEnabledFor(logging.DEBUG):
+            self.logger.debug(
+                f"Appending to {property_iri} of {instance_iri}: adding {len(added)} triples:\n\n{format_triples_turtle(added)}",
+            )
+        return node, added, property_spec
+
     # ------------------------------------------------------------------
     # deletion of instances
     # ------------------------------------------------------------------
+
+    def _delete(
+        self,
+        *,
+        node: Node,
+    ) -> None:
+        """
+        Deletion is not part of the mapper's public interface, by decision.
+
+        An individual is never deleted: other data may still refer to it, and a mapper that
+        removed it would leave those references dangling. A property is retracted with ``commit``, which removes
+        the triples that the new data no longer holds. This entry point is kept, private, for a
+        later extension.
+
+        Args:
+            node: Node instance that would be deleted
+        Raises:
+            NotImplementedError: always
+        """
+        raise NotImplementedError(_DELETION_MESSAGE)
 
     def delete(
         self,
         *,
         node: Node,
-    ) -> bool:
+    ) -> None:
         """
-        Delete an existing Node instance from the graph database.
+        Deprecated alias of the private ``_delete``, kept for one release.
 
-        Args:
-            node: Node instance to delete
-        Returns:
-            bool: True if deletion was successful, False otherwise
+        It warns with a ``DeprecationWarning`` and raises the error that ``_delete`` raises.
+
+        Raises:
+            NotImplementedError: always
         """
-        raise NotImplementedError("Delete method is not yet implemented.")
-        return False
+        warnings.warn(
+            "OGM.delete is deprecated: an individual is never deleted, and the name goes "
+            "in a later release. Retract properties with commit().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self._delete(node=node)

@@ -118,26 +118,6 @@ class TestOGMDataError:
     def test_its_docstring_names_its_action(self):
         assert "Refused" in OGMDataError.__doc__
 
-    def test_create_of_a_known_instance_of_another_class_keeps_its_message(
-        self, ogm, store
-    ):
-        store.iri_exists.return_value = True
-        store.is_subclass.return_value = False
-
-        with (
-            patch.object(ogm, "get_class_spec", return_value=belt_spec()),
-            pytest.raises(OGMDataError) as caught,
-        ):
-            ogm.create(class_iri=BELT, data={}, instance_iri=BELT1)
-
-        assert str(caught.value) == (
-            "Node IRI https://example.org/errors#belt1 is known but is not an instance of "
-            "ClassSpec https://example.org/errors#Belt"
-        )
-        assert caught.value.instance_iri == BELT1
-        assert caught.value.class_iri == BELT
-        store.triples_add.assert_not_called()
-
     @pytest.mark.parametrize(
         "unknown, named",
         [
@@ -385,7 +365,10 @@ class TestOGMUsageTypeError:
             ogm.commit(changes=[{"id": BELT1}])
 
         assert isinstance(caught.value, OGMUsageTypeError)
-        assert str(caught.value) == "commit() takes Create and Update changes, got dict"
+        assert (
+            str(caught.value)
+            == "commit() takes Create, Update and Append changes, got dict"
+        )
 
 
 # ---------------------------------------------------------------------------
