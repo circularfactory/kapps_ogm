@@ -16,11 +16,11 @@ from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.class_scope import ClassScope
 
 ONTOLOGY = Path(__file__).parent.parent / "test_data" / "datatype_range.ttl"
-NS = "https://example.org/ex#"
+NS = "http://example.org/ex#"
 SERVICE = IRI(NS + "Service")
 HAS_MIXTURE = IRI(NS + "hasMixture")
 GAUSSIAN_MIXTURE = IRI(NS + "GaussianMixture")
-INSTANCE = IRI("https://example.org/i/service1")
+INSTANCE = IRI("http://example.org/i/service1")
 
 
 def ontology_triples() -> list:

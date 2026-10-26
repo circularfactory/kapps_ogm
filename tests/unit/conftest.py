@@ -14,24 +14,24 @@ from kapps_ogm.node.core import Node
 
 # Test data constants
 TRANSFER_UNIT_IRI = IRI(
-    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit"
+    "http://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit"
 )
-INSTANCE_IRI = IRI("https://example.org/instances/transfer_unit_001")
+INSTANCE_IRI = IRI("http://example.org/instances/transfer_unit_001")
 RDF_TYPE = IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
 
 PROPERTY_CHAINS = [
-    [IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt")],
-    [IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier")],
+    [IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt")],
+    [IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier")],
 ]
 
 HAS_CONVEYOR_BELT = IRI(
-    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"
+    "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"
 )
 HAS_CONVEYOR_SPEED = IRI(
-    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"
+    "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"
 )
-HAS_VALUE = IRI("https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue")
-HAS_UNIT = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit")
+HAS_VALUE = IRI("http://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue")
+HAS_UNIT = IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit")
 
 MOCK_INSTANCE_DATA = {
     HAS_CONVEYOR_BELT.lined: [

@@ -80,8 +80,8 @@ class TestNodeToTriplesErrors:
         # Setup: Instance with None values
         mock_instance = Mock(spec=BaseModel)
         mock_instance.__class__._iri_fields = {
-            "property1": IRI("https://example.org/prop1"),
-            "property2": IRI("https://example.org/prop2"),
+            "property1": IRI("http://example.org/prop1"),
+            "property2": IRI("http://example.org/prop2"),
         }
         mock_instance.property1 = "value1"
         mock_instance.property2 = None  # None value
@@ -98,7 +98,7 @@ class TestNodeToTriplesErrors:
 
         # Assert: Only property1 appears in triples
         predicates = {p for s, p, o in triples if isinstance(p, IRI)}
-        assert IRI("https://example.org/prop1") in predicates
+        assert IRI("http://example.org/prop1") in predicates
         # property2 should not appear since its value is None
         triple_strs = [str(t) for t in triples]
         assert not any("prop2" in str(t) for t in triple_strs)
@@ -157,7 +157,7 @@ class TestNodeToJSONLDErrors:
         # Setup
         mock_instance = Mock(spec=BaseModel)
         mock_instance.__class__._iri_fields = {
-            "test_property": IRI("https://example.org/testProp")
+            "test_property": IRI("http://example.org/testProp")
         }
         mock_instance.test_property = "test_value"
 
@@ -189,7 +189,7 @@ class TestNodeToJSONLDErrors:
         )
 
         # Execute: Context with valid namespace
-        valid_context = {"ex": "https://example.org/"}
+        valid_context = {"ex": "http://example.org/"}
         json_ld = node.to_json_ld(context=valid_context)
 
         # Assert: Returns valid structure
@@ -220,7 +220,7 @@ class TestNodeStateManagement:
     def test_node_repr_with_long_iri(self, simple_class_spec: Mock):
         """Test __repr__ handles very long IRIs."""
         # Setup: Very long IRI
-        long_iri = IRI("https://example.org/" + "a" * 200)
+        long_iri = IRI("http://example.org/" + "a" * 200)
         node = Node(
             id=long_iri,
             class_spec=simple_class_spec,
@@ -240,7 +240,7 @@ class TestNodeStateManagement:
         """Test node handles circular references in data dict."""
         # Setup: Circular data structure: Self-reference
         circular_data = {}
-        circular_data[IRI("https://example.org/property")] = [circular_data]
+        circular_data[IRI("http://example.org/property")] = [circular_data]
 
         node = Node(
             id=INSTANCE_IRI,
@@ -252,13 +252,13 @@ class TestNodeStateManagement:
         node.data = circular_data
 
         # Assert: Data assigned
-        assert node.data == {IRI("https://example.org/property"): [node]}
+        assert node.data == {IRI("http://example.org/property"): [node]}
 
         # Multi-hop circular reference
         data_node_1 = {}
         data_node_2 = {}
-        data_node_1[IRI("https://example.org/property_1_to_2")] = [data_node_2]
-        data_node_2[IRI("https://example.org/property_2_to_1")] = [data_node_1]
+        data_node_1[IRI("http://example.org/property_1_to_2")] = [data_node_2]
+        data_node_2[IRI("http://example.org/property_2_to_1")] = [data_node_1]
 
         node_1 = Node(
             id=INSTANCE_IRI,
@@ -269,11 +269,11 @@ class TestNodeStateManagement:
         # Should be able to assign circular data without error
         node_1.data = data_node_1
 
-        node_2 = node_1.data[IRI("https://example.org/property_1_to_2")][0]
+        node_2 = node_1.data[IRI("http://example.org/property_1_to_2")][0]
 
         # Assert: Data assigned
         assert isinstance(node_2, Node)
-        assert node_2.data == {IRI("https://example.org/property_2_to_1"): [node_1]}
+        assert node_2.data == {IRI("http://example.org/property_2_to_1"): [node_1]}
 
     def test_node_equality_comparison(self, simple_class_spec):
         """Test node equality based on IRI."""
@@ -321,7 +321,7 @@ class TestNodeListHandling:
         # Setup: Instance with list property
         mock_instance = Mock(spec=BaseModel)
         mock_instance.__class__._iri_fields = {
-            "multi_valued": IRI("https://example.org/multiProp")
+            "multi_valued": IRI("http://example.org/multiProp")
         }
         mock_instance.multi_valued = ["value1", "value2", "value3"]
 
@@ -341,7 +341,7 @@ class TestNodeListHandling:
             for t in triples
             if isinstance(t, tuple)
             and len(t) == 3
-            and t[1] == IRI("https://example.org/multiProp")
+            and t[1] == IRI("http://example.org/multiProp")
         ]
         assert len(prop_triples) == 3
 
@@ -350,7 +350,7 @@ class TestNodeListHandling:
         # Setup: Instance with empty list
         mock_instance = Mock(spec=BaseModel)
         mock_instance.__class__._iri_fields = {
-            "empty_list": IRI("https://example.org/emptyProp")
+            "empty_list": IRI("http://example.org/emptyProp")
         }
         mock_instance.empty_list = []
 
@@ -370,6 +370,6 @@ class TestNodeListHandling:
             for t in triples
             if isinstance(t, tuple)
             and len(t) == 3
-            and t[1] == IRI("https://example.org/emptyProp")
+            and t[1] == IRI("http://example.org/emptyProp")
         ]
         assert len(prop_triples) == 0

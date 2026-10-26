@@ -26,7 +26,7 @@ from kapps_triplestore_interface import IRI
 
 
 WELL_KNOWN_GENID_PATH = "/.well-known/genid/"
-DEFAULT_SKOLEM_NAMESPACE = "https://w3id.org/circularfactory/.well-known/genid/"
+DEFAULT_SKOLEM_NAMESPACE = "http://w3id.org/circularfactory/.well-known/genid/"
 
 
 def validate_skolem_namespace(namespace: str) -> str:

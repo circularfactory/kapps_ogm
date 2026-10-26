@@ -1,9 +1,9 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
-@prefix inf: <https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#> .
-@prefix tu: <https://www.sfb1574.kit.edu/ontologies/TransferUnit#> .
-@prefix tui: <https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#> .
+@prefix inf: <http://www.sfb1574.kit.edu/ontologies/CrcInterfaces#> .
+@prefix tu: <http://www.sfb1574.kit.edu/ontologies/TransferUnit#> .
+@prefix tui: <http://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#> .
 
 tui: rdf:type owl:Ontology ;
 	owl:imports inf: ;

@@ -25,7 +25,7 @@ from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.class_scope import ClassScope
 
-NS = "https://example.org/owlminimums#"
+NS = "http://example.org/owlminimums#"
 HAS_VALUE = IRI(NS + "hasValue")
 
 LITERAL = PropertyValueKind.LITERAL
@@ -202,7 +202,7 @@ LIVE_FORMS = {
 @pytest.fixture(scope="module")
 def ontology(db):
     """A belt class with one parameter property per form, in a namespace no other test uses."""
-    ns = f"https://example.org/owlminimums_{uuid.uuid4().hex[:8]}#"
+    ns = f"http://example.org/owlminimums_{uuid.uuid4().hex[:8]}#"
     belt, value = IRI(ns + "Belt"), IRI(ns + "hasValue")
     triples = [
         (belt, IRI("rdf:type"), IRI("owl:Class")),

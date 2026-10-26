@@ -29,8 +29,8 @@ from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.class_scope import ClassScope
 from kapps_ogm.utils.errors import OGMDataError, PropertyOutsideScopeError
 
-DS = "https://www.sfb1574.kit.edu/ontologies/DemoStructure#"
-DSI = "https://www.sfb1574.kit.edu/ontologies/DemoStructureInstance#"
+DS = "http://www.sfb1574.kit.edu/ontologies/DemoStructure#"
+DSI = "http://www.sfb1574.kit.edu/ontologies/DemoStructureInstance#"
 
 NODE_A = IRI(DS + "NodeA")
 NODE_B = IRI(DS + "NodeB")

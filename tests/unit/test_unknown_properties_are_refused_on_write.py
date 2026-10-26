@@ -22,10 +22,10 @@ from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from kapps_ogm.node.core import Node
 from kapps_ogm.utils import mint_skolem_iri
 
-ONTO = "https://www.sfb1574.kit.edu/ontologies/TransferUnit"
+ONTO = "http://www.sfb1574.kit.edu/ontologies/TransferUnit"
 HAS_UNIT = IRI("hasUnit", ONTO)
 
-NS = "https://example.org/unknownproperties#"
+NS = "http://example.org/unknownproperties#"
 BELT = IRI(NS + "Belt")
 BELT1 = IRI(NS + "belt1")
 MOTOR = IRI(NS + "Motor")
@@ -340,7 +340,7 @@ def ontology_store(store: Mock):
     with patch.object(
         PropertySpec,
         "_resolve_effective_ranges",
-        side_effect=lambda prop_iri, ogm: set(PROPERTIES[prop_iri][1]),
+        side_effect=lambda prop_iri, ogm, **_: set(PROPERTIES[prop_iri][1]),
     ):
         yield store
 

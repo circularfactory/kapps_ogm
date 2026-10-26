@@ -19,13 +19,13 @@ from kapps_ogm.utils.errors import UnresolvableNodeAddressError
 from kapps_ogm.ogm import OGM
 
 
-ONTO = "https://www.sfb1574.kit.edu/ontologies/TransferUnit"
+ONTO = "http://www.sfb1574.kit.edu/ontologies/TransferUnit"
 CONVEYOR_BELT = IRI("ConveyorBelt", ONTO)
 HAS_SPEED = IRI("hasConveyorSpeed", ONTO)
 HAS_UNIT = IRI("hasUnit", ONTO)
 HAS_VALUE = IRI("hasValue", ONTO)
-BELT_IRI = IRI("https://example.org/instances/belt1")
-SKOLEM_IRI = IRI("https://w3id.org/circularfactory/.well-known/genid/ab12")
+BELT_IRI = IRI("http://example.org/instances/belt1")
+SKOLEM_IRI = IRI("http://w3id.org/circularfactory/.well-known/genid/ab12")
 
 
 def _build_param_spec() -> ClassSpec:
@@ -163,7 +163,7 @@ class TestMintingNewAnonymousNode:
 
     def test_ogm_namespace_used_for_minted_address(self, belt_spec: ClassSpec, mock_db):
         """The OGM's configured skolem_namespace is used for the minted address."""
-        custom_namespace = "https://example.org/.well-known/genid/"
+        custom_namespace = "http://example.org/.well-known/genid/"
         ogm = OGM(db=mock_db, skolem_namespace=custom_namespace)
 
         node = Node(

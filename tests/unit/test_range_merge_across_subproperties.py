@@ -16,7 +16,7 @@ from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from kapps_ogm.utils.class_scope import ClassScope
 from kapps_ogm.ogm import OGM
 
-NS = "https://example.org/rangemerge#"
+NS = "http://example.org/rangemerge#"
 
 
 def restriction(bnode: BNode, on_property: IRI, **facets) -> list[tuple]:
@@ -713,8 +713,8 @@ class TestMergeConjunctive:
         """Two restrictions on the same property with identical allValuesFrom xsd:string merge
         successfully.
         """
-        prop_iri = IRI("https://example.org/mergeTest#ownerProp")
-        nested_prop = IRI("https://example.org/mergeTest#nestedProp")
+        prop_iri = IRI("http://example.org/mergeTest#ownerProp")
+        nested_prop = IRI("http://example.org/mergeTest#nestedProp")
 
         spec1 = PropertySpec(
             iri=nested_prop,
@@ -747,8 +747,8 @@ class TestMergeConjunctive:
         """Two restrictions with incompatible allValuesFrom (xsd:string vs xsd:int) raise
         ValueError naming both properties.
         """
-        prop_iri = IRI("https://example.org/mergeTest#ownerProp2")
-        nested_prop = IRI("https://example.org/mergeTest#nestedProp2")
+        prop_iri = IRI("http://example.org/mergeTest#ownerProp2")
+        nested_prop = IRI("http://example.org/mergeTest#nestedProp2")
 
         spec1 = PropertySpec(
             iri=nested_prop,
@@ -779,8 +779,8 @@ class TestMergeConjunctive:
         """Merged cardinalities take the most restrictive: min is max of inputs, max is min of
         inputs.
         """
-        prop_iri = IRI("https://example.org/mergeTest#ownerProp3")
-        nested_prop = IRI("https://example.org/mergeTest#nestedProp3")
+        prop_iri = IRI("http://example.org/mergeTest#ownerProp3")
+        nested_prop = IRI("http://example.org/mergeTest#nestedProp3")
 
         spec1 = PropertySpec(
             iri=nested_prop,
@@ -813,8 +813,8 @@ class TestMergeConjunctive:
         """When merged min_count exceeds max_count, raises ValueError with 'unsatisfiable' in
         message.
         """
-        prop_iri = IRI("https://example.org/mergeTest#ownerProp4")
-        nested_prop = IRI("https://example.org/mergeTest#nestedProp4")
+        prop_iri = IRI("http://example.org/mergeTest#ownerProp4")
+        nested_prop = IRI("http://example.org/mergeTest#nestedProp4")
 
         spec1 = PropertySpec(
             iri=nested_prop,
@@ -843,8 +843,8 @@ class TestMergeConjunctive:
 
     def test_literal_beats_object_value_kind(self):
         """If either side is LITERAL, merged value_kind is LITERAL."""
-        prop_iri = IRI("https://example.org/mergeTest#ownerProp5")
-        nested_prop = IRI("https://example.org/mergeTest#nestedProp5")
+        prop_iri = IRI("http://example.org/mergeTest#ownerProp5")
+        nested_prop = IRI("http://example.org/mergeTest#nestedProp5")
 
         spec1 = PropertySpec(
             iri=nested_prop,
@@ -874,9 +874,9 @@ class TestMergeConjunctive:
 
     def test_mismatched_iri_raises(self):
         """Different iri on the two specs raises ValueError (programming error)."""
-        prop_iri = IRI("https://example.org/mergeTest#ownerProp6")
-        nested_prop1 = IRI("https://example.org/mergeTest#nestedProp6a")
-        nested_prop2 = IRI("https://example.org/mergeTest#nestedProp6b")
+        prop_iri = IRI("http://example.org/mergeTest#ownerProp6")
+        nested_prop1 = IRI("http://example.org/mergeTest#nestedProp6a")
+        nested_prop2 = IRI("http://example.org/mergeTest#nestedProp6b")
 
         spec1 = PropertySpec(
             iri=nested_prop1,
@@ -908,8 +908,8 @@ class TestMergeConjunctive:
         """Hand-built specs, one with python_range_type=str, one with all_from=IRI, raise
         ValueError matching 'both a datatype and a class'.
         """
-        prop_iri = IRI("https://example.org/mergeTest#ownerPropDC")
-        nested_prop = IRI("https://example.org/mergeTest#nestedPropDC")
+        prop_iri = IRI("http://example.org/mergeTest#ownerPropDC")
+        nested_prop = IRI("http://example.org/mergeTest#nestedPropDC")
 
         spec1 = PropertySpec(
             iri=nested_prop,
@@ -929,7 +929,7 @@ class TestMergeConjunctive:
             min_count=None,
             max_count=None,
             some_from=None,
-            all_from=IRI("https://example.org/vk#SomeClass"),
+            all_from=IRI("http://example.org/vk#SomeClass"),
             nested=None,
         )
 
@@ -940,8 +940,8 @@ class TestMergeConjunctive:
         """One spec with python_range_type=str, one with only max_count=2 and no target.
         Assert the merge succeeds and python_range_type is str.
         """
-        prop_iri = IRI("https://example.org/mergeTest#ownerPropCO")
-        nested_prop = IRI("https://example.org/mergeTest#nestedPropCO")
+        prop_iri = IRI("http://example.org/mergeTest#ownerPropCO")
+        nested_prop = IRI("http://example.org/mergeTest#nestedPropCO")
 
         spec1 = PropertySpec(
             iri=nested_prop,
@@ -1255,8 +1255,8 @@ class TestObjectValuedConstraintValidation:
         """Build a PropertySpec with value_kind OBJECT, all_from=IRI, call to_pydantic_field(),
         and validate that a list containing an IRI passes without raising TypeError.
         """
-        nested_prop = IRI("https://example.org/vk#nestedProp")
-        class_iri = IRI("https://example.org/vk#SomeClass")
+        nested_prop = IRI("http://example.org/vk#nestedProp")
+        class_iri = IRI("http://example.org/vk#SomeClass")
 
         spec = PropertySpec(
             iri=nested_prop,
@@ -1273,7 +1273,7 @@ class TestObjectValuedConstraintValidation:
 
         TestModel = create_model("TestModel", test_field=(field_type, field))
 
-        iri_value = IRI("https://example.org/instance#someInstance")
+        iri_value = IRI("http://example.org/instance#someInstance")
         instance = TestModel(test_field=[iri_value])
         assert instance.test_field == [iri_value]
 
@@ -1284,8 +1284,8 @@ class TestObjectValuedConstraintValidation:
         coerce it, so rejecting it here would contradict the type the guard is protecting.
         The check is "is this a reference", and an int is not one.
         """
-        nested_prop = IRI("https://example.org/vk#nestedProp2")
-        class_iri = IRI("https://example.org/vk#AnotherClass")
+        nested_prop = IRI("http://example.org/vk#nestedProp2")
+        class_iri = IRI("http://example.org/vk#AnotherClass")
 
         spec = PropertySpec(
             iri=nested_prop,
@@ -1386,18 +1386,18 @@ class TestReferenceConstraintAcceptsPlainStrings:
     def test_plain_string_reference_is_accepted(self):
         """A str that the IRI field type would coerce must not be rejected by the guard."""
         spec = PropertySpec(
-            iri=IRI("https://example.org/refcheck#nestedProp"),
+            iri=IRI("http://example.org/refcheck#nestedProp"),
             value_kind=PropertyValueKind.OBJECT,
             python_range_type=None,
             min_count=None,
             max_count=None,
             some_from=None,
-            all_from=IRI("https://example.org/refcheck#SomeClass"),
+            all_from=IRI("http://example.org/refcheck#SomeClass"),
             nested=None,
         )
 
         field_type, field = spec.to_pydantic_field()
         Model = create_model("RefCheckModel", test_field=(field_type, field))
 
-        instance = Model(test_field=["https://example.org/instance#i1"])
+        instance = Model(test_field=["http://example.org/instance#i1"])
         assert len(instance.test_field) == 1

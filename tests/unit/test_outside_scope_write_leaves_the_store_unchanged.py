@@ -18,7 +18,7 @@ from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.class_scope import ClassScope
 from kapps_ogm.utils.errors import PropertyOutsideScopeError
 
-NS = "https://example.org/outsidescope#"
+NS = "http://example.org/outsidescope#"
 SENSOR = IRI(NS + "Sensor")
 NAME = IRI(NS + "name")
 COLOUR = IRI(NS + "colour")

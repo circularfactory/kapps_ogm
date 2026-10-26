@@ -31,7 +31,7 @@ XSD_STRING = IRI(str(XSD.string))
 
 @pytest.fixture(scope="module")
 def vocabulary() -> dict[str, IRI]:
-    ns = f"https://example.org/explicitonly_{uuid.uuid4().hex[:8]}#"
+    ns = f"http://example.org/explicitonly_{uuid.uuid4().hex[:8]}#"
     names = [
         "Box",
         "Crate",

@@ -17,6 +17,7 @@ from kapps_ogm.utils.errors import OGMDataError, OGMOntologyError, OGMUsageError
 
 if TYPE_CHECKING:
     from kapps_ogm.mapping.class_spec import ClassSpec, ClassHydrationLevel
+    from kapps_ogm.mapping.interfaces import InterfaceResolution
     from kapps_ogm.ogm import OGM
 
 logger = logging.getLogger("kapps_pspec")
@@ -40,6 +41,27 @@ def chain_ranges(prop_iri: IRI, range_var: str, ancestor_var: str = "?ancestor")
     # Kept to one line so it interpolates cleanly at any indentation.
     return (
         f"<{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>* {ancestor_var} . "
+        f"{ancestor_var} <http://www.w3.org/2000/01/rdf-schema#range> {range_var} ."
+    )
+
+
+def source_ranges(
+    prop_iri: IRI,
+    range_var: str,
+    sources: Optional[tuple[IRI, ...]],
+    ancestor_var: str = "?ancestor",
+) -> str:
+    """The prelude binding `range_var` to every rdfs:range of the properties in `sources`.
+
+    Without `sources` it is `chain_ranges`, the walk over the whole rdfs:subPropertyOf* chain.
+    With them, the properties are named: the interfaces resolved for an instance, and the
+    superproperties down to a merge depth, as `interfaces.range_sources` gives them.
+    """
+    if sources is None:
+        return chain_ranges(prop_iri, range_var, ancestor_var)
+    values = " ".join(f"<{source}>" for source in sources)
+    return (
+        f"VALUES {ancestor_var} {{ {values} }} "
         f"{ancestor_var} <http://www.w3.org/2000/01/rdf-schema#range> {range_var} ."
     )
 
@@ -326,7 +348,10 @@ class PropertySpec:
 
     @classmethod
     def _resolve_effective_ranges(
-        cls, prop_iri: IRI, ogm: "OGM"
+        cls,
+        prop_iri: IRI,
+        ogm: "OGM",
+        sources: Optional[tuple[IRI, ...]] = None,
     ) -> set[Union[IRI, BNode, type]]:
         """Resolve all effective rdfs:range assertions across the rdfs:subPropertyOf* chain.
 
@@ -334,13 +359,14 @@ class PropertySpec:
         ancestors, after the most-specific-named-class filter. The set is deliberately
         heterogeneous: a named class arrives as an IRI, an XSD datatype as a python type,
         and an anonymous restriction as a BNode, and the caller dispatches on which.
+        With ``sources``, only the ranges of the properties it names count.
         """
         range_query = f"""
         SELECT DISTINCT ?obj
         WHERE {{
-            {chain_ranges(prop_iri, "?obj")}
+            {source_ranges(prop_iri, "?obj", sources)}
             FILTER NOT EXISTS {{
-                {chain_ranges(prop_iri, "?sub", ancestor_var="?otherAncestor")}
+                {source_ranges(prop_iri, "?sub", sources, ancestor_var="?otherAncestor")}
                 # The subsumption filter picks the most specific *named* class. Without the
                 # isIRI guard it could also discard an anonymous restriction range, silently
                 # dropping half a merge.
@@ -464,9 +490,25 @@ class PropertySpec:
         hydration_level: "ClassHydrationLevel",
         *,
         _path: tuple[IRI, ...] = (),
+        _interfaces: Optional["InterfaceResolution"] = None,
     ) -> PropertySpec:
         """The specification of ``prop_iri``. ``_path`` holds the classes being specified above
-        it, from the root, as in ``ClassSpec.specify``."""
+        it, from the root, as in ``ClassSpec.specify``. ``_interfaces`` holds the interfaces
+        declared for the call and its merge depth; without either, the range is the one of the
+        whole rdfs:subPropertyOf* chain."""
+        from .interfaces import range_sources
+
+        sources: Optional[tuple[IRI, ...]] = None
+        if _interfaces is not None and (
+            _interfaces.interfaces_of(prop_iri) or _interfaces.merge_depth is not None
+        ):
+            sources = range_sources(
+                ogm,
+                prop_iri,
+                _interfaces.interfaces_of(prop_iri),
+                _interfaces.merge_depth,
+            )
+
         # Categorize the property regarding its type and characteristics
         type_query_result = ogm.db.triples_get(
             sub=prop_iri, pred="rdf:type", include_implicit=True
@@ -488,7 +530,9 @@ class PropertySpec:
                 characteristics.append(PROPERTY_CHARACTERISTICS[ptype])
 
         # Determine the property specification based on its range
-        range_set = cls._resolve_effective_ranges(prop_iri=prop_iri, ogm=ogm)
+        range_set = cls._resolve_effective_ranges(
+            prop_iri=prop_iri, ogm=ogm, sources=sources
+        )
 
         anonymous_ranges = {r for r in range_set if isinstance(r, BNode)}
         named_ranges = range_set - anonymous_ranges
@@ -511,7 +555,7 @@ class PropertySpec:
             # a shape from; anything else is an ontology we do not understand.
             query_is_complex_type = f"""
                 ASK {{
-                    {chain_ranges(prop_iri, "?range")}
+                    {source_ranges(prop_iri, "?range", sources)}
                     {{
                         ?range a <http://www.w3.org/2002/07/owl#Restriction>
                     }}
@@ -537,6 +581,7 @@ class PropertySpec:
                 property_spec = cls._specify_complex_property(
                     prop_iri=prop_iri,
                     ogm=ogm,
+                    sources=sources,
                 )
             else:
                 raise OGMOntologyError(
@@ -600,6 +645,7 @@ class PropertySpec:
                         hydration_level=hydration_level,
                         path=_path,
                         range_types=range_types,
+                        interfaces=_interfaces,
                     )
             else:
                 raise OGMOntologyError(
@@ -639,6 +685,7 @@ class PropertySpec:
         hydration_level: "ClassHydrationLevel",
         path: tuple[IRI, ...],
         range_types: Optional[list[IRI]] = None,
+        interfaces: Optional["InterfaceResolution"] = None,
     ) -> PropertySpec:
         from .class_spec import ClassSpec, ClassHydrationLevel
 
@@ -660,6 +707,7 @@ class PropertySpec:
                     hydration_level=hydration_level,
                     _path=path,
                     _known_types=range_types,
+                    _interfaces=interfaces,
                 )
             except OGMDataError as error:
                 # Record the property chain from the root to the class whose scope failed, so a
@@ -706,10 +754,15 @@ class PropertySpec:
         cls,
         prop_iri: IRI,
         ogm: "OGM",
+        sources: Optional[tuple[IRI, ...]] = None,
     ) -> PropertySpec:
         """
         Processes a complex OWL property and returns a PropertySpec with a nested ClassSpec
         that includes intersection, union, complement, and enumerated restrictions.
+
+        The nested properties, the ``intersectionOf`` metadata and the bindings that the
+        structural metadata is read from are sorted, so the specification does not depend on
+        the order in which the store answers or in which the ranges were found.
         """
         from .class_spec import ClassSpec, ClassHydrationLevel
 
@@ -738,7 +791,7 @@ class PropertySpec:
             ?effectiveMinCardinality ?effectiveMaxCardinality
             ?intersectionList
         WHERE {{
-            {chain_ranges(prop_iri, "?range")}
+            {source_ranges(prop_iri, "?range", sources)}
             {{
                 ?range <http://www.w3.org/2002/07/owl#intersectionOf> ?intersectionList .
                 ?intersectionList <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?restriction .
@@ -846,7 +899,7 @@ class PropertySpec:
         # Query 2 — structural metadata
         query_metadata = f"""SELECT DISTINCT ?unionList ?complementClass ?oneOfList
         WHERE {{
-            {chain_ranges(prop_iri, "?range")}
+            {source_ranges(prop_iri, "?range", sources)}
             {{
                 ?range <http://www.w3.org/2002/07/owl#unionOf> ?unionList
             }}
@@ -864,8 +917,17 @@ class PropertySpec:
         metadata_result = ogm.db.query(query_metadata)
         metadata_bindings = metadata_result["results"]["bindings"]
 
-        # Iterate all of query 2's bindings; first one seen wins
-        for binding in metadata_bindings:
+        # Sorted below, so the order in which the store answers cannot change the result.
+        nested_class = property_spec.nested
+        nested_class.properties = dict(sorted(nested_class.properties.items()))
+        if "intersectionOf" in nested_class.metadata:
+            nested_class.metadata["intersectionOf"].sort()
+
+        # Iterate all of query 2's bindings, in a fixed order; first one seen wins
+        for binding in sorted(
+            metadata_bindings,
+            key=lambda b: sorted((key, value["value"]) for key, value in b.items()),
+        ):
             if "unionList" in binding:
                 # Note: resolve_rdf_list method would need to be implemented in the triple store interface
                 if "unionOf" not in property_spec.nested.metadata:

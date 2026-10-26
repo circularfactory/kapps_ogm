@@ -28,14 +28,14 @@ from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.class_scope import ClassScope
 from kapps_ogm.utils.errors import OGMDataError
 
-EX = "https://example.org/ex#"
+EX = "http://example.org/ex#"
 SERVICE = IRI(EX + "Service")
 HAS_MIXTURE = IRI(EX + "hasMixture")
 HAS_ANY = IRI(EX + "hasAny")
 HAS_MONTH = IRI(EX + "hasMonth")
 HAS_LABEL = IRI(EX + "hasLabel")
 GAUSSIAN_MIXTURE = IRI(EX + "GaussianMixture")
-INSTANCE = IRI("https://example.org/i/service1")
+INSTANCE = IRI("http://example.org/i/service1")
 
 STAND_IN = Path(__file__).parent.parent / "test_data" / "datatype_range.ttl"
 

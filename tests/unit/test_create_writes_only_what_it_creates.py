@@ -25,15 +25,15 @@ from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from kapps_ogm.ogm import OGM
 
-EX = "https://example.org/ex#"
+EX = "http://example.org/ex#"
 MEASUREMENT = IRI(EX + "Measurement")
 WORKPIECE = IRI(EX + "Workpiece")
 VALUE = IRI(EX + "value")
 MEASURED_ON = IRI(EX + "measuredOn")
 NAME = IRI(EX + "name")
 
-M2 = IRI("https://example.org/i/m2")
-OBJ2 = IRI("https://example.org/i/obj2")
+M2 = IRI("http://example.org/i/m2")
+OBJ2 = IRI("http://example.org/i/obj2")
 
 
 def measurement_spec() -> ClassSpec:
@@ -123,7 +123,7 @@ class TestCreate:
         assert store.triples_add.call_args.kwargs["absent_subjects"] == [M2]
 
     def test_the_named_graph_goes_with_the_precondition(self, ogm, store):
-        graph = IRI("https://example.org/graph")
+        graph = IRI("http://example.org/graph")
         ogm.create(
             class_iri=MEASUREMENT,
             data={str(VALUE): [1.5]},
@@ -148,7 +148,7 @@ class TestACreateOfCommit:
         assert kwargs["absent_subjects"] == [M2]
 
     def test_every_instance_it_creates_is_an_absent_subject(self, ogm, store):
-        other = IRI("https://example.org/i/m3")
+        other = IRI("http://example.org/i/m3")
         owned = {"id": str(OBJ2), str(NAME): ["Housing 2"]}
         ogm.commit(
             changes=[

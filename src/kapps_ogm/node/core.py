@@ -78,6 +78,10 @@ class Node:
 
         self.instance = instance
 
+        # The stored triples that an authoritative declaration of a write makes stale, keyed by
+        # their node and property. A write's fetch reads them; the OGM removes them.
+        self._stale: dict[tuple[Any, IRI], set] = {}
+
     # -------------------------
     # Lifecycle helpers
     # -------------------------

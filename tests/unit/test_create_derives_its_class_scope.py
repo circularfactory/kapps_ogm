@@ -29,7 +29,7 @@ from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.class_scope import ClassScope
 from kapps_ogm.utils.skolem import is_skolem_iri
 
-NS = "https://example.org/derivedscope#"
+NS = "http://example.org/derivedscope#"
 
 WORKPIECE = IRI(NS + "Workpiece")
 ORIGIN = IRI(NS + "Origin")
@@ -40,9 +40,9 @@ HAS_NAME = IRI(NS + "hasName")
 HAS_SPEED = IRI(NS + "hasSpeed")
 HAS_VALUE = IRI(NS + "hasValue")
 
-NEW = IRI("https://example.org/i/new")
-ORIGIN_1 = IRI("https://example.org/i/origin1")
-STORED = IRI("https://example.org/i/stored")
+NEW = IRI("http://example.org/i/new")
+ORIGIN_1 = IRI("http://example.org/i/origin1")
+STORED = IRI("http://example.org/i/stored")
 
 # Every property of the workpiece data below, nested ones included.
 ALL_PROPERTIES = {HAS_SERIAL, HAS_ORIGIN, HAS_NAME, HAS_SPEED, HAS_VALUE}

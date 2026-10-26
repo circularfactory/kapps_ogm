@@ -33,7 +33,7 @@ XSD_DOUBLE = IRI(str(XSD.double))
 
 @pytest.fixture(scope="module")
 def v() -> dict[str, IRI]:
-    ns = f"https://example.org/superscope_{uuid.uuid4().hex[:8]}#"
+    ns = f"http://example.org/superscope_{uuid.uuid4().hex[:8]}#"
     names = ["Device", "Pump", "Valve", "hasName", "hasPower"]
     return {name: IRI(ns + name) for name in names}
 

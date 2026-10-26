@@ -1,13 +1,13 @@
 # A mixture datatype named as an example of a datatype outside XSD; it is not a model of a
 # mixture. rdfs:Class beside rdfs:Datatype is what a store with RDFS inference holds.
-@prefix ex: <https://example.org/ex#> .
+@prefix ex: <http://example.org/ex#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 ex:GaussianMixture a rdfs:Datatype , rdfs:Class .
 ex:Service a owl:Class .
-<https://example.org/i/service1> a ex:Service , owl:NamedIndividual ;
+<http://example.org/i/service1> a ex:Service , owl:NamedIndividual ;
     ex:hasMixture "[0.3, 0.7]"^^ex:GaussianMixture .
 ex:hasMixture a owl:DatatypeProperty ; rdfs:domain ex:Service ; rdfs:range ex:GaussianMixture .
 ex:hasAny a owl:DatatypeProperty ; rdfs:domain ex:Service ; rdfs:range rdfs:Literal .

@@ -32,7 +32,7 @@ from kapps_ogm.utils.class_scope import ClassScope
 
 from conftest import ONE_WORKPIECE_PER_RESOURCE, load_shape, remove_shapes
 
-NS = "https://example.org/several#"
+NS = "http://example.org/several#"
 WORKPIECE = IRI(NS + "Workpiece")
 RESOURCE = IRI(NS + "Resource")
 POSSESSION_STATE = IRI(NS + "PossessionState")

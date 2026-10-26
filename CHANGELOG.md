@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.3.3 — 2026-10-26
+
+- **kapps_ogm requires kapps-triplestore-interface 2.2.3 or later within 2.2**
+  (`kapps-triplestore-interface~=2.2.3`). It is the release this version is tested against.
+
+- **The OGM sends the queries it builds itself as text, without the interface's parse.** Given a
+  `SPARQLQuery`, the triple store interface parses the rendered text again to validate it. That
+  costs several milliseconds a query on the caller's thread, and more for a longer one. The
+  property discovery, the maximum counts, the superproperties of an interface, the read of an
+  anonymous node and the read of its stored terms now go as the text the interface would send.
+  The other reads, which the interface builds itself (the triple reads and the class lookup of an
+  instance), are validated as before. One error changes: a query that the store cannot read now
+  raises the interface's error for the store's answer, not `InvalidQueryError`. The queries are
+  built from fixed templates and from terms that the interface has rendered, so this needs a
+  defect in the OGM.
+
+- **A parameter node's interfaces are resolved per instance, and the view is selected by merge
+  depth.** An interface (interim name) is a property whose own `rdfs:range` adds to a parameter
+  node's shape, such as the connection details of one protocol. A parameter property no longer
+  needs an `rdfs:subPropertyOf` marker for it: `fetch` merges the range of every interface whose
+  range restricts a property the stored node carries, so two machines of one class can speak two
+  protocols. A new `Interface(property_iri, interface_iri)` entry declares one for a node that
+  carries no metadata yet; `get_class_spec`, `fetch` and `create` take `interfaces=`, and so do
+  `Create` and `Update`. All resolved interfaces are merged, so a dual-homed node has both shapes.
+  An `Interface` with `authoritative=True` selects the shape alone, and an `Update` with it
+  removes the stored values that only an evidenced interface restricts, in the same write. An
+  `Update` whose data leaves out a property that only evidence put into the shape keeps that
+  property's stored values; it replaces them only when its data names the property. The new
+  `merge_depth` keyword of `get_class_spec`, `fetch` and `Update` counts the levels of the
+  interface hierarchy from its most general property: `merge_depth=1` gives a model without the
+  connection details that the ontology puts on a protocol interface, with no filtering step.
+  Without `merge_depth` every level is merged, as before. A `ClassSpec` given to `fetch` is used
+  as given, never extended. `fetch` resolves the shape for its instance, so two instances of one
+  class can get two ClassSpecs; a consumer that caches a ClassSpec keys it on the resolved
+  interfaces too. Nodes at one position of one fetch share one shape, the union of their
+  interfaces, because one field of a model has one type. A commit, and a `fetch`, read the
+  interfaces of a stored parameter node that carries a property outside its shape, which is one
+  more query; in a commit it is read inside the `fetch` of the stored node. So are the stored
+  values that an authoritative declaration makes stale: the `fetch` of an `Update` takes their
+  properties into its shape, so every read of the stored node, its values, its evidence and its
+  stale values, sits below a `fetch`. The nested properties of an anonymous range are now
+  sorted, so a shape does not depend on the order in which the store answers.
+
+- **The shipped text names no project built with the library.** The test configuration says in
+  neutral words why a run on the shared throwaway dataset forces other projects to seed again, and
+  a test keeps consumer names out of the shipped files.
+
+- **Every ontology namespace is spelled with `http://`, like every W3C ontology.** The default
+  skolem base is now `http://w3id.org/circularfactory/.well-known/genid/`; the tests, test data,
+  demo outputs, examples and README follow, and a test refuses an `https://` ontology namespace.
+  A skolem IRI stored under the old scheme is still recognised, since the check tests only the
+  path. Web links stay `https://`.
+
 ## 0.3.2 — 2026-10-21
 
 - **kapps_ogm requires kapps-triplestore-interface 2.2.2 or later within 2.2**

@@ -73,7 +73,7 @@ class TestOGMCreate:
         """Test creating node with ID provided in data dict."""
         # Setup
         mock_db.iri_exists.return_value = False
-        provided_iri = IRI("https://example.org/my_instance")
+        provided_iri = IRI("http://example.org/my_instance")
         data = {"id": str(provided_iri), IRI("rdfs:label"): ["Test"]}
         data_without_id = {IRI("rdfs:label"): ["Test"]}
 
@@ -101,7 +101,7 @@ class TestOGMCreate:
         """Test that create auto-generates ID when none provided."""
         # Setup
         data = {IRI("rdfs:label"): ["Test"]}
-        generated_iri = IRI("https://example.org/generated_123")
+        generated_iri = IRI("http://example.org/generated_123")
 
         ogm_with_mock_db.naming_schema = Mock(return_value=generated_iri)
 

@@ -50,7 +50,7 @@ RDFS_RANGE = IRI("rdfs:range")
 XSD_STRING = IRI("http://www.w3.org/2001/XMLSchema#string")
 XSD_INTEGER = IRI("http://www.w3.org/2001/XMLSchema#integer")
 
-STUB_NAMESPACE = "https://example.org/cycles#"
+STUB_NAMESPACE = "http://example.org/cycles#"
 
 CLASSES = ("Task", "Workflow", "Service", "Cell", "Left", "Right", "Part")
 
@@ -293,7 +293,7 @@ class TestCyclesOnAStub(CycleChecks):
 @pytest.fixture(scope="module")
 def live_namespace(db: TripleStore) -> str:
     """The ontology and the task chain in the store, in a namespace no other test uses."""
-    namespace = f"https://example.org/cycles_{uuid.uuid4().hex[:8]}#"
+    namespace = f"http://example.org/cycles_{uuid.uuid4().hex[:8]}#"
     assert db.triples_add(ontology_triples(vocabulary(namespace)), check_exist=False)
     return namespace
 
@@ -365,7 +365,7 @@ class TestTheReadersTakeAnIriOnlyLink:
         task: ClassSpec,
         as_dict: bool,
     ):
-        new = IRI("https://example.org/cycles_instances#t0")
+        new = IRI("http://example.org/cycles_instances#t0")
         reference = {"id": v["t1"]} if as_dict else v["t1"]
 
         with patch.object(ogm, "get_class_spec", return_value=task):
@@ -384,7 +384,7 @@ class TestTheReadersTakeAnIriOnlyLink:
     ):
         with patch.object(ClassSpec, "specify", return_value=task):
             blank = ogm.create_blank_instance(
-                class_iri=v["Task"], instance_iri=IRI("https://example.org/blank#t")
+                class_iri=v["Task"], instance_iri=IRI("http://example.org/blank#t")
             )
 
         [link] = getattr(blank, v["hasReferenceTask"].lined)

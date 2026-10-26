@@ -26,24 +26,24 @@ from kapps_ogm.node.core import Node
 # =====================================================================
 
 TRANSFER_UNIT_IRI = IRI(
-    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit"
+    "http://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit"
 )
 
 HAS_CONVEYOR_BELT = IRI(
-    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"
+    "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"
 )
 HAS_CONVEYOR_POSITION = IRI(
-    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"
+    "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"
 )
 HAS_CONVEYOR_SPEED = IRI(
-    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"
+    "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"
 )
 HAS_LIGHT_BARRIER = IRI(
-    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"
+    "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"
 )
-IS_OCCUPIED = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied")
-HAS_VALUE = IRI("https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue")
-HAS_UNIT = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit")
+IS_OCCUPIED = IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied")
+HAS_VALUE = IRI("http://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue")
+HAS_UNIT = IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit")
 
 MOCK_DATA = {
     HAS_CONVEYOR_BELT.lined: [
@@ -84,16 +84,16 @@ MOCK_DATA = {
 
 PROPERTY_CHAINS_REDUCED = [
     [
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"),
     ],
     [
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"),
     ],
     [
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied"),
     ],
 ]
 
@@ -107,39 +107,39 @@ PROPERTY_CHAINS_REDUCED = [
 PROPERTY_CHAINS_EXPANDED = [
     # hasConveyorBelt → hasConveyorPosition → hasValue
     [
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue"),
     ],
     # hasConveyorBelt → hasConveyorPosition → hasUnit
     [
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit"),
     ],
     # hasConveyorBelt → hasConveyorSpeed → hasValue
     [
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue"),
     ],
     # hasConveyorBelt → hasConveyorSpeed → hasUnit
     [
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit"),
     ],
     # hasLightBarrier → isOccupied → hasValue
     [
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue"),
     ],
     # hasLightBarrier → isOccupied → hasUnit
     [
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied"),
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied"),
+        IRI("http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit"),
     ],
 ]
 
@@ -318,8 +318,8 @@ class TestClassSpecEquivalence:
         # The last element of each expanded chain should be a terminal property
         # (hasValue or hasUnit in our case - these point to literals)
         terminal_props = {
-            "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue",
-            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit",
+            "http://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue",
+            "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit",
         }
 
         for chain in PROPERTY_CHAINS_EXPANDED:
@@ -436,13 +436,13 @@ class TestPropertyChainDataExtraction:
         chains = node.extract_property_chains()
 
         top_level = {
-            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt",
-            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier",
+            "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt",
+            "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier",
         }
 
         terminal = {
-            "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue",
-            "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit",
+            "http://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue",
+            "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit",
         }
 
         for chain in chains:

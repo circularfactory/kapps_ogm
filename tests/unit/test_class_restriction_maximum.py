@@ -35,8 +35,8 @@ from kapps_triplestore_interface.utils.utils import (
 from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.class_scope import ClassScope
 
-NS = "https://example.org/classbounds#"
-TIME_NS = "https://example.org/time#"
+NS = "http://example.org/classbounds#"
+TIME_NS = "http://example.org/time#"
 
 WORKPIECE = IRI(NS + "Workpiece")
 COMPONENT = IRI(NS + "Component")
@@ -52,10 +52,10 @@ HAS_NOTE = IRI(NS + "hasNote")
 HAS_SPEED = IRI(NS + "hasSpeed")
 HAS_VALUE = IRI(NS + "hasValue")
 
-STATE_1 = IRI("https://example.org/i/state1")
-STATE_2 = IRI("https://example.org/i/state2")
-ORIGIN_1 = IRI("https://example.org/i/origin1")
-ORIGIN_2 = IRI("https://example.org/i/origin2")
+STATE_1 = IRI("http://example.org/i/state1")
+STATE_2 = IRI("http://example.org/i/state2")
+ORIGIN_1 = IRI("http://example.org/i/origin1")
+ORIGIN_2 = IRI("http://example.org/i/origin2")
 
 STAND_IN = f"""
 @prefix ex: <{NS}> .
@@ -171,7 +171,7 @@ def scope(*properties: IRI) -> ClassScope:
 def create(ogm: OGM, class_iri: IRI, data: dict):
     return ogm.create(
         class_iri=class_iri,
-        instance_iri=IRI("https://example.org/i/new"),
+        instance_iri=IRI("http://example.org/i/new"),
         data=data,
         class_scope=scope(*data),
     )

@@ -32,15 +32,15 @@ from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.skolem import is_skolem_iri
 
-ONTO = "https://www.sfb1574.kit.edu/ontologies/TransferUnit"
+ONTO = "http://www.sfb1574.kit.edu/ontologies/TransferUnit"
 CONVEYOR_BELT = IRI("ConveyorBelt", ONTO)
 HAS_SPEED = IRI("hasConveyorSpeed", ONTO)
 HAS_UNIT = IRI("hasUnit", ONTO)
 HAS_VALUE = IRI("hasValue", ONTO)
 HAS_MQTT_TOPIC = IRI("hasMQTTTopic", ONTO)  # undeclared by the range restriction
 
-BELT_IRI = IRI("https://example.org/instances/ConveyorBelt1_left")
-PARAMETER_IRI = IRI("https://w3id.org/circularfactory/.well-known/genid/ab12")
+BELT_IRI = IRI("http://example.org/instances/ConveyorBelt1_left")
+PARAMETER_IRI = IRI("http://w3id.org/circularfactory/.well-known/genid/ab12")
 
 STORED_VALUE = 12.1
 UPDATED_VALUE = 1.4

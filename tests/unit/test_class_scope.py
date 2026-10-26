@@ -10,7 +10,7 @@ def simple_property_chain():
     """Single length property chain."""
     return [
         [
-            IRI("https://ex.org#hasNodeB"),
+            IRI("http://ex.org#hasNodeB"),
         ],
     ]
 
@@ -20,8 +20,8 @@ def multi_property_chain():
     """Multi length property chain."""
     return [
         [
-            IRI("https://ex.org#hasNodeB"),
-            IRI("https://ex.org#hasNodeC"),
+            IRI("http://ex.org#hasNodeB"),
+            IRI("http://ex.org#hasNodeC"),
         ]
     ]
 
@@ -31,12 +31,12 @@ def multiple_property_chains():
     """Multiple property chains."""
     return [
         [
-            IRI("https://ex.org#hasNodeB"),
-            IRI("https://ex.org#hasAttributeB"),
+            IRI("http://ex.org#hasNodeB"),
+            IRI("http://ex.org#hasAttributeB"),
         ],
         [
-            IRI("https://ex.org#hasNodeC"),
-            IRI("https://ex.org#hasAttributeC"),
+            IRI("http://ex.org#hasNodeC"),
+            IRI("http://ex.org#hasAttributeC"),
         ],
     ]
 
@@ -46,12 +46,12 @@ def overlapping_property_chains():
     """Overlapping property chains."""
     return [
         [
-            IRI("https://ex.org#hasNodeB"),
-            IRI("https://ex.org#hasAttributeB"),
+            IRI("http://ex.org#hasNodeB"),
+            IRI("http://ex.org#hasAttributeB"),
         ],
         [
-            IRI("https://ex.org#hasNodeB"),
-            IRI("https://ex.org#hasNodeC"),
+            IRI("http://ex.org#hasNodeB"),
+            IRI("http://ex.org#hasNodeC"),
         ],
     ]
 
@@ -65,15 +65,15 @@ class TestClassScopeDictBehavior:
     def test_setitem_converts_to_iri(self):
         """Test that setting items converts keys to IRI."""
         scope = ClassScope()
-        scope["https://ex.org#hasNodeB"] = {}
+        scope["http://ex.org#hasNodeB"] = {}
 
-        key = IRI("https://ex.org#hasNodeB")
+        key = IRI("http://ex.org#hasNodeB")
         assert key in scope
         assert isinstance(list(scope.keys())[0], IRI)
 
     def test_setitem_converts_value_to_classscope(self):
         """Test that setting items converts values to ClassScope."""
-        key = IRI("https://ex.org#hasNodeB")
+        key = IRI("http://ex.org#hasNodeB")
         scope = ClassScope()
         scope[key] = {}
 
@@ -86,7 +86,7 @@ class TestClassScopeFromPropertyChains:
         scope = ClassScope.from_property_chains(simple_property_chain)
 
         assert len(scope) == 1
-        assert IRI("https://ex.org#hasNodeB") in scope
+        assert IRI("http://ex.org#hasNodeB") in scope
 
     def test_nested_property_chain(self, multi_property_chain):
         """Test creating ClassScope from nested property chains."""
@@ -94,14 +94,14 @@ class TestClassScopeFromPropertyChains:
 
         assert len(scope) == 1
 
-        first_prop = IRI("https://ex.org#hasNodeB")
+        first_prop = IRI("http://ex.org#hasNodeB")
         assert first_prop in scope
 
         nested_scope = scope[first_prop]
         assert isinstance(nested_scope, ClassScope)
         assert len(nested_scope) == 1
 
-        second_prop = IRI("https://ex.org#hasNodeC")
+        second_prop = IRI("http://ex.org#hasNodeC")
         assert second_prop in nested_scope
 
     def test_multiple_property_chains(self, multiple_property_chains):
@@ -110,20 +110,20 @@ class TestClassScopeFromPropertyChains:
 
         assert len(scope) == 2
 
-        node_b_prop = IRI("https://ex.org#hasNodeB")
-        node_c_prop = IRI("https://ex.org#hasNodeC")
+        node_b_prop = IRI("http://ex.org#hasNodeB")
+        node_c_prop = IRI("http://ex.org#hasNodeC")
 
         assert node_b_prop in scope
         assert node_c_prop in scope
 
         node_b_scope = scope[node_b_prop]
         assert len(node_b_scope) == 1
-        attribute_b_prop = IRI("https://ex.org#hasAttributeB")
+        attribute_b_prop = IRI("http://ex.org#hasAttributeB")
         assert attribute_b_prop in node_b_scope
 
         node_c_scope = scope[node_c_prop]
         assert len(node_c_scope) == 1
-        attribute_c_prop = IRI("https://ex.org#hasAttributeC")
+        attribute_c_prop = IRI("http://ex.org#hasAttributeC")
         assert attribute_c_prop in node_c_scope
 
     def test_empty_property_chains(self):
@@ -143,15 +143,15 @@ class TestClassScopeFromPropertyChains:
         # hasNodeB should appear only once at root level
         assert len(scope) == 1
 
-        node_b_prop = IRI("https://ex.org#hasNodeB")
+        node_b_prop = IRI("http://ex.org#hasNodeB")
         assert node_b_prop in scope
 
         # The child scope under hasNodeB should have two properties
         child_scope = scope[node_b_prop]
         assert len(child_scope) == 2
 
-        attribute_b_prop = IRI("https://ex.org#hasAttributeB")
-        node_c_prop = IRI("https://ex.org#hasNodeC")
+        attribute_b_prop = IRI("http://ex.org#hasAttributeB")
+        node_c_prop = IRI("http://ex.org#hasNodeC")
 
         assert attribute_b_prop in child_scope
         assert node_c_prop in child_scope
@@ -160,61 +160,61 @@ class TestClassScopeFromPropertyChains:
 class TestClassScopeFromNodeData:
     # Node A has two attributes
     data1 = {
-        "https://ex.org#hasNodeA": [
+        "http://ex.org#hasNodeA": [
             {
                 # Node A
-                "https://ex.org#hasAttributeA1": [123],
-                "https://ex.org#hasAttributeA2": ["string"],
+                "http://ex.org#hasAttributeA1": [123],
+                "http://ex.org#hasAttributeA2": ["string"],
             },
         ],
     }
 
     tree1 = {
-        IRI("https://ex.org#hasNodeA"): {
-            IRI("https://ex.org#hasAttributeA1"): {},
-            IRI("https://ex.org#hasAttributeA2"): {},
+        IRI("http://ex.org#hasNodeA"): {
+            IRI("http://ex.org#hasAttributeA1"): {},
+            IRI("http://ex.org#hasAttributeA2"): {},
         }
     }
 
     # Node A has two instances with different attributes
     data2 = {
-        "https://ex.org#hasNodeA": [
+        "http://ex.org#hasNodeA": [
             {
                 # Node A Version 1
-                "https://ex.org#hasAttributeA1": [123],
+                "http://ex.org#hasAttributeA1": [123],
             },
             {
                 # Node A Version 2
-                "https://ex.org#hasAttributeA2": ["string"],
+                "http://ex.org#hasAttributeA2": ["string"],
             },
         ],
     }
 
     tree2 = {
-        IRI("https://ex.org#hasNodeA"): {
-            IRI("https://ex.org#hasAttributeA1"): {},
-            IRI("https://ex.org#hasAttributeA2"): {},
+        IRI("http://ex.org#hasNodeA"): {
+            IRI("http://ex.org#hasAttributeA1"): {},
+            IRI("http://ex.org#hasAttributeA2"): {},
         }
     }
 
     # Node A has two instances with the same subnodes, but different attributes later
     data3 = {
-        "https://ex.org#hasNodeA": [
+        "http://ex.org#hasNodeA": [
             {
                 # Node A Version 1
-                "https://ex.org#hasNodeB": [
+                "http://ex.org#hasNodeB": [
                     {
                         # Node B Version 1
-                        "https://ex.org#hasAttributeB1": [456],
+                        "http://ex.org#hasAttributeB1": [456],
                     }
                 ],
             },
             {
                 # Node A Version 2
-                "https://ex.org#hasNodeB": [
+                "http://ex.org#hasNodeB": [
                     {
                         # Node B Version 2
-                        "https://ex.org#hasAttributeB2": ["string"],
+                        "http://ex.org#hasAttributeB2": ["string"],
                     }
                 ],
             },
@@ -222,10 +222,10 @@ class TestClassScopeFromNodeData:
     }
 
     tree3 = {
-        IRI("https://ex.org#hasNodeA"): {
-            IRI("https://ex.org#hasNodeB"): {
-                IRI("https://ex.org#hasAttributeB1"): {},
-                IRI("https://ex.org#hasAttributeB2"): {},
+        IRI("http://ex.org#hasNodeA"): {
+            IRI("http://ex.org#hasNodeB"): {
+                IRI("http://ex.org#hasAttributeB1"): {},
+                IRI("http://ex.org#hasAttributeB2"): {},
             }
         }
     }
@@ -314,11 +314,11 @@ class TestClassScopeToPropertyChains:
 class TestClassScopeEdgeCases:
     def test_single_chain_with_one_property(self):
         """Test with a single property in one chain."""
-        chains = [[IRI("https://ex.org#prop1")]]
+        chains = [[IRI("http://ex.org#prop1")]]
         scope = ClassScope.from_property_chains(chains)
 
         assert len(scope) == 1
-        prop1 = IRI("https://ex.org#prop1")
+        prop1 = IRI("http://ex.org#prop1")
         assert prop1 in scope
         assert len(scope[prop1]) == 0
 
@@ -326,12 +326,12 @@ class TestClassScopeEdgeCases:
         """Test multiple property chains with same depth."""
         chains = [
             [
-                IRI("https://ex.org#hasNodeB"),
-                IRI("https://ex.org#hasNodeC"),
+                IRI("http://ex.org#hasNodeB"),
+                IRI("http://ex.org#hasNodeC"),
             ],
             [
-                IRI("https://ex.org#hasNodeD"),
-                IRI("https://ex.org#hasNodeE"),
+                IRI("http://ex.org#hasNodeD"),
+                IRI("http://ex.org#hasNodeE"),
             ],
         ]
         scope = ClassScope.from_property_chains(chains)
@@ -342,11 +342,11 @@ class TestClassScopeEdgeCases:
     def test_mixed_depth_chains(self):
         """Test property chains with different depths."""
         chains = [
-            [IRI("https://ex.org#hasNodeB")],
+            [IRI("http://ex.org#hasNodeB")],
             [
-                IRI("https://ex.org#hasNodeC"),
-                IRI("https://ex.org#hasNodeD"),
-                IRI("https://ex.org#hasNodeE"),
+                IRI("http://ex.org#hasNodeC"),
+                IRI("http://ex.org#hasNodeD"),
+                IRI("http://ex.org#hasNodeE"),
             ],
         ]
         scope = ClassScope.from_property_chains(chains)
@@ -354,11 +354,11 @@ class TestClassScopeEdgeCases:
         assert len(scope) == 2
 
         # Shallow chain
-        node_b = IRI("https://ex.org#hasNodeB")
+        node_b = IRI("http://ex.org#hasNodeB")
         assert len(scope[node_b]) == 0
 
         # Deep chain
-        node_c = IRI("https://ex.org#hasNodeC")
+        node_c = IRI("http://ex.org#hasNodeC")
         assert len(scope[node_c]) == 1
 
     def test_property_chains_preserves_structure(self, overlapping_property_chains):
@@ -378,18 +378,18 @@ class TestClassScopeEdgeCases:
         """Test deeply nested property chains."""
         deep_chains = [
             [
-                IRI("https://ex.org#hasNodeB"),
-                IRI("https://ex.org#hasNodeC"),
-                IRI("https://ex.org#hasNodeD"),
+                IRI("http://ex.org#hasNodeB"),
+                IRI("http://ex.org#hasNodeC"),
+                IRI("http://ex.org#hasNodeD"),
             ]
         ]
 
         scope = ClassScope.from_property_chains(deep_chains)
 
         # Navigate through nested structure
-        prop_b = IRI("https://ex.org#hasNodeB")
-        prop_c = IRI("https://ex.org#hasNodeC")
-        prop_d = IRI("https://ex.org#hasNodeD")
+        prop_b = IRI("http://ex.org#hasNodeB")
+        prop_c = IRI("http://ex.org#hasNodeC")
+        prop_d = IRI("http://ex.org#hasNodeD")
 
         assert prop_b in scope
         assert prop_c in scope[prop_b]

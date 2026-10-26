@@ -55,7 +55,7 @@ class TestNodeRepr:
     def test_repr_with_data_but_not_materialized(self, mock_node):
         """Test __repr__ when node has data but no instance."""
         # Setup
-        mock_node.data = {IRI("https://example.org#some"): ["data"]}
+        mock_node.data = {IRI("http://example.org#some"): ["data"]}
 
         # Execute
         repr_str = repr(mock_node)

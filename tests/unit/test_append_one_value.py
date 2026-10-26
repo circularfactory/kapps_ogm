@@ -39,8 +39,8 @@ from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.errors import OGMDataError, OGMNotFoundError, OGMUsageError
 from kapps_ogm.utils.skolem import is_skolem_iri
 
-DS = "https://www.sfb1574.kit.edu/ontologies/DemoStructure#"
-DSI = "https://www.sfb1574.kit.edu/ontologies/DemoStructureInstance#"
+DS = "http://www.sfb1574.kit.edu/ontologies/DemoStructure#"
+DSI = "http://www.sfb1574.kit.edu/ontologies/DemoStructureInstance#"
 
 NODE_A = IRI(DS + "NodeA")
 NODE_B = IRI(DS + "NodeB")
@@ -190,7 +190,7 @@ class TestASimpleValue:
         assert node.data == {HAS_ATTRIBUTE_A: ["Attribute A2.2 Content"]}
 
     def test_the_named_graph_applies(self, ogm, store):
-        graph = IRI("https://example.org/graphs/append")
+        graph = IRI("http://example.org/graphs/append")
         ogm.commit(
             changes=[Append(A2, HAS_ATTRIBUTE_A, "x")],
             named_graph=graph,
@@ -258,7 +258,7 @@ class TestAnAnonymousNode:
                     Append(
                         B2,
                         HAS_COMPLEX_ATTRIBUTE,
-                        {**self.VALUE, "id": "https://example.org/.well-known/genid/x"},
+                        {**self.VALUE, "id": "http://example.org/.well-known/genid/x"},
                     )
                 ]
             )
@@ -410,7 +410,7 @@ class TestBesideOtherChanges:
 # Two writers at the same moment, on a live store
 # ---------------------------------------------------------------------------
 
-NS = "https://example.org/append#"
+NS = "http://example.org/append#"
 RESOURCE = IRI(NS + "Resource")
 CAPABILITY = IRI(NS + "Capability")
 HAS_CAPABILITY = IRI(NS + "hasCapability")

@@ -33,7 +33,7 @@ from kapps_ogm.utils.class_scope import ClassScope
 
 from .test_owl_minimums_not_required import count, restriction_range
 
-NS = "https://example.org/singlevalued#"
+NS = "http://example.org/singlevalued#"
 BELT = IRI(NS + "Belt")
 BELT1 = IRI(NS + "belt1")
 BELT2 = IRI(NS + "belt2")
@@ -179,7 +179,7 @@ def ontology(db):
     property of an anonymous parameter node, as the TransferUnit ontology does for a belt's speed.
     `hasPredecessor` is a functional reference to another belt.
     """
-    ns = f"https://example.org/singlevalued_{uuid.uuid4().hex[:8]}#"
+    ns = f"http://example.org/singlevalued_{uuid.uuid4().hex[:8]}#"
     belt, value = IRI(ns + "Belt"), IRI(ns + "hasValue")
     setpoint, predecessor = IRI(ns + "hasSetpoint"), IRI(ns + "hasPredecessor")
     exact, capped = IRI(ns + "hasExactSpeed"), IRI(ns + "hasCappedSpeed")

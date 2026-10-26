@@ -19,7 +19,7 @@ from kapps_ogm.node.core import Node
 from kapps_ogm.node.node_validator import NodeValidator
 from kapps_ogm.utils.errors import OGMDataError
 
-NS = "https://example.org/validatormessages#"
+NS = "http://example.org/validatormessages#"
 THING = IRI(NS + "Thing")
 CHILD = IRI(NS + "Child")
 HAS_VALUE = IRI(NS + "hasValue")

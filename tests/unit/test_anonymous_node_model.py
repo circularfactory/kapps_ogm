@@ -13,16 +13,16 @@ from kapps_ogm.mapping.anonymous_model import AnonymousNodeModel
 from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 
-ONTO = "https://www.sfb1574.kit.edu/ontologies/TransferUnit"
+ONTO = "http://www.sfb1574.kit.edu/ontologies/TransferUnit"
 
 HAS_UNIT = IRI("hasUnit", ONTO)
 HAS_VALUE = IRI("hasValue", ONTO)
 HAS_MEASUREMENT = IRI("hasMeasurement", ONTO)
 NAMED_CLASS = IRI("ConveyorBelt", ONTO)
 
-SKOLEM_IRI = IRI("https://w3id.org/circularfactory/.well-known/genid/ab12")
-OUTER_SKOLEM_IRI = IRI("https://w3id.org/circularfactory/.well-known/genid/outer01")
-INNER_SKOLEM_IRI = IRI("https://w3id.org/circularfactory/.well-known/genid/inner01")
+SKOLEM_IRI = IRI("http://w3id.org/circularfactory/.well-known/genid/ab12")
+OUTER_SKOLEM_IRI = IRI("http://w3id.org/circularfactory/.well-known/genid/outer01")
+INNER_SKOLEM_IRI = IRI("http://w3id.org/circularfactory/.well-known/genid/inner01")
 
 UNIT_FIELD = HAS_UNIT.lined
 VALUE_FIELD = HAS_VALUE.lined

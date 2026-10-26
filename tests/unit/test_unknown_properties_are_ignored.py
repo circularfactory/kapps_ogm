@@ -12,7 +12,7 @@ from kapps_triplestore_interface import IRI
 from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 
-ONTO = "https://www.sfb1574.kit.edu/ontologies/TransferUnit"
+ONTO = "http://www.sfb1574.kit.edu/ontologies/TransferUnit"
 HAS_UNIT = IRI("hasUnit", ONTO)
 
 

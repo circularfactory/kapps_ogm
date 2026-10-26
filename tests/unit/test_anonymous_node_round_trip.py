@@ -23,16 +23,16 @@ from kapps_ogm.node.core import Node
 from kapps_ogm.node.node_address import reconcile_anonymous_addresses
 from kapps_ogm.utils.errors import AmbiguousNodeAlignmentError
 
-ONTO = "https://www.sfb1574.kit.edu/ontologies/TransferUnit"
+ONTO = "http://www.sfb1574.kit.edu/ontologies/TransferUnit"
 CONVEYOR_BELT = IRI("ConveyorBelt", ONTO)
 HAS_SPEED = IRI("hasConveyorSpeed", ONTO)
 HAS_UNIT = IRI("hasUnit", ONTO)
 HAS_VALUE = IRI("hasValue", ONTO)
 HAS_MQTT_TOPIC = IRI("hasMQTTTopic", ONTO)  # deliberately undeclared by the range restriction
 
-BELT_IRI = IRI("https://example.org/instances/belt1")
-SKOLEM_IRI = IRI("https://w3id.org/circularfactory/.well-known/genid/ab12")
-OTHER_SKOLEM_IRI = IRI("https://w3id.org/circularfactory/.well-known/genid/cd34")
+BELT_IRI = IRI("http://example.org/instances/belt1")
+SKOLEM_IRI = IRI("http://w3id.org/circularfactory/.well-known/genid/ab12")
+OTHER_SKOLEM_IRI = IRI("http://w3id.org/circularfactory/.well-known/genid/cd34")
 
 
 def build_belt_spec() -> ClassSpec:

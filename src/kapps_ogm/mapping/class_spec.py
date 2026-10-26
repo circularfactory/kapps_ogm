@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional, Type, Any, Dict, List, TYPE_CHECKING
 from enum import Enum
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, replace
 import logging
 import pydantic as pd
 
@@ -16,6 +16,7 @@ from kapps_ogm.mapping.property_spec import (
     PropertyValueKind,
     _tighten_bound,
 )
+from kapps_ogm.mapping.interfaces import InterfaceResolution
 from kapps_ogm.utils.class_scope import ClassScope
 from kapps_ogm.utils.errors import (
     OGMDataError,
@@ -179,7 +180,10 @@ class ClassSpec:
         asks when it refuses a property, to tell a property the class does not declare from one
         that the scope leaves out."""
         bindings = (
-            ogm.db.query(_property_discovery_query(class_iri), convert_bindings=True)
+            ogm.db.query(
+                _property_discovery_query(class_iri).to_string(validate=False),
+                convert_bindings=True,
+            )
             .get("results", {})
             .get("bindings", [])
         )
@@ -218,7 +222,7 @@ class ClassSpec:
             include_implicit=False,
         )
         bindings = (
-            ogm.db.query(query, convert_bindings=True)
+            ogm.db.query(query.to_string(validate=False), convert_bindings=True)
             .get("results", {})
             .get("bindings", [])
         )
@@ -264,6 +268,7 @@ class ClassSpec:
         *,
         _path: tuple[IRI, ...] = (),
         _known_types: Optional[list[IRI]] = None,
+        _interfaces: Optional[InterfaceResolution] = None,
     ) -> ClassSpec:
         """
         create a ClassSpec for the given IRI by analyzing the ClassScope, its RDF data in the triple store via the OGM instance.
@@ -285,6 +290,8 @@ class ClassSpec:
                 the recursion.
             _known_types: The class's rdf:type values, when the caller has read them
                 already. Internal.
+            _interfaces: The interfaces declared for the call and its merge depth, for every
+                parameter property on the way down. Internal.
 
         Returns:
             A ClassSpec instance representing the class specification"""
@@ -359,7 +366,8 @@ class ClassSpec:
             )
 
         query_result = db.query(
-            _property_discovery_query(class_iri), convert_bindings=True
+            _property_discovery_query(class_iri).to_string(validate=False),
+            convert_bindings=True,
         )
         property_list = [
             b["property"] for b in query_result.get("results", {}).get("bindings", [])
@@ -391,9 +399,35 @@ class ClassSpec:
                 ogm=ogm,
                 hydration_level=hydration_level,
                 _path=path,
+                _interfaces=_interfaces,
             )
             class_spec.properties[prop].max_count = _tighten_bound(
                 class_spec.properties[prop].max_count, maximum_counts.get(prop), min
             )
 
         return class_spec
+
+    def _with_interfaces(
+        self,
+        prop: IRI,
+        interfaces: InterfaceResolution,
+        ogm: "OGM",
+    ) -> ClassSpec:
+        """A copy of this ClassSpec in which the parameter property ``prop`` is specified
+        again, with the interfaces and the merge depth of ``interfaces``.
+
+        This ClassSpec is left as it is, so a ClassSpec that another instance or a caller holds
+        never changes. The class's own maximum count of ``prop`` is applied again, as
+        ``specify`` applies it."""
+        prop_spec = PropertySpec.specify(
+            prop_iri=prop,
+            nested_scope=None,
+            ogm=ogm,
+            hydration_level=self.hydration_level,
+            _interfaces=interfaces,
+        )
+        if self.iri is not None:
+            prop_spec.max_count = _tighten_bound(
+                prop_spec.max_count, self._maximum_counts(self.iri, ogm).get(prop), min
+            )
+        return replace(self, properties={**self.properties, prop: prop_spec})

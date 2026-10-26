@@ -1,0 +1,87 @@
+# A stand-in for a parameter ontology whose protocol is resolved per instance.
+#
+# `ex:hasSpeed` names no protocol: its range is the domain restriction alone. The interface
+# hierarchy is authored apart from it: `ex:interfaceParameter` carries the content a peer may
+# see (`ex:accessMode`), and its two protocol subproperties carry the connection details.
+# `ex:hasMarkedSpeed` is the other case, a property whose protocol is fixed in the TBox by an
+# `rdfs:subPropertyOf` marker.
+
+@prefix ex: <http://example.org/iface#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+ex:ConveyorBelt a owl:Class ; rdfs:label "Conveyor belt" .
+
+ex:hasSpeed a owl:ObjectProperty ;
+    rdfs:domain ex:ConveyorBelt ;
+    rdfs:range [ owl:intersectionOf (
+        [ a owl:Restriction ; owl:onProperty ex:hasValue ; owl:allValuesFrom xsd:double ]
+        [ a owl:Restriction ; owl:onProperty ex:hasUnit ; owl:allValuesFrom xsd:string ]
+    ) ] .
+
+ex:hasMarkedSpeed a owl:ObjectProperty ;
+    rdfs:domain ex:ConveyorBelt ;
+    rdfs:subPropertyOf ex:mqttParameter ;
+    rdfs:range [ a owl:Restriction ; owl:onProperty ex:hasValue ; owl:allValuesFrom xsd:double ] .
+
+ex:interfaceParameter a owl:ObjectProperty ;
+    rdfs:range [ a owl:Restriction ; owl:onProperty ex:accessMode ; owl:allValuesFrom xsd:string ] .
+
+ex:mqttParameter a owl:ObjectProperty ;
+    rdfs:subPropertyOf ex:interfaceParameter ;
+    rdfs:range [ owl:intersectionOf (
+        [ a owl:Restriction ; owl:onProperty ex:hasTopic ; owl:allValuesFrom xsd:string ]
+        [ a owl:Restriction ; owl:onProperty ex:hasBroker ; owl:allValuesFrom xsd:string ;
+          owl:maxCardinality 1 ]
+        [ a owl:Restriction ; owl:onProperty ex:hasPort ; owl:allValuesFrom xsd:int ]
+    ) ] .
+
+ex:opcuaParameter a owl:ObjectProperty ;
+    rdfs:subPropertyOf ex:interfaceParameter ;
+    rdfs:range [ a owl:Restriction ; owl:onProperty ex:hasEndpoint ; owl:allValuesFrom xsd:string ] .
+
+ex:hasValue a owl:DatatypeProperty .
+ex:hasUnit a owl:DatatypeProperty .
+ex:accessMode a owl:DatatypeProperty .
+ex:hasTopic a owl:DatatypeProperty .
+ex:hasBroker a owl:DatatypeProperty .
+ex:hasPort a owl:DatatypeProperty .
+ex:hasEndpoint a owl:DatatypeProperty .
+
+# Instances. Each parameter node is a Skolem IRI, as the OGM writes it.
+
+<http://example.org/i/beltMqtt> a ex:ConveyorBelt ;
+    ex:hasSpeed <http://example.org/.well-known/genid/mqtt> .
+<http://example.org/.well-known/genid/mqtt>
+    ex:hasValue 1.5 ; ex:hasUnit "m/s" ; ex:accessMode "readwrite" ;
+    ex:hasTopic "belt/speed" ; ex:hasBroker "127.0.0.1" ; ex:hasPort "1883"^^xsd:int ;
+    rdfs:comment "not an interface property" .
+
+# Two values of a single-valued connection property: a data error, never reconciled.
+<http://example.org/i/beltTwoBrokers> a ex:ConveyorBelt ;
+    ex:hasSpeed <http://example.org/.well-known/genid/twoBrokers> .
+<http://example.org/.well-known/genid/twoBrokers>
+    ex:hasValue 1.0 ; ex:hasTopic "two/speed" ; ex:hasBroker "10.0.0.1", "10.0.0.2" .
+
+<http://example.org/i/beltOpcua> a ex:ConveyorBelt ;
+    ex:hasSpeed <http://example.org/.well-known/genid/opcua> .
+<http://example.org/.well-known/genid/opcua>
+    ex:hasValue 0.5 ; ex:hasEndpoint "opc.tcp://belt:4840" .
+
+<http://example.org/i/beltBare> a ex:ConveyorBelt ;
+    ex:hasSpeed <http://example.org/.well-known/genid/bare> .
+<http://example.org/.well-known/genid/bare>
+    ex:hasValue 0.25 .
+
+<http://example.org/i/beltDual> a ex:ConveyorBelt ;
+    ex:hasSpeed <http://example.org/.well-known/genid/dual> .
+<http://example.org/.well-known/genid/dual>
+    ex:hasValue 2.0 ; ex:hasTopic "dual/speed" ; ex:hasEndpoint "opc.tcp://dual:4840" .
+
+<http://example.org/i/beltMarked> a ex:ConveyorBelt ;
+    ex:hasMarkedSpeed <http://example.org/.well-known/genid/marked> .
+<http://example.org/.well-known/genid/marked>
+    ex:hasValue 3.0 ; ex:accessMode "read" ; ex:hasTopic "marked/speed" ;
+    ex:hasBroker "127.0.0.1" .

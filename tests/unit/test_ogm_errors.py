@@ -42,7 +42,7 @@ from kapps_ogm.utils import (
     mint_skolem_iri,
 )
 
-NS = "https://example.org/errors#"
+NS = "http://example.org/errors#"
 BELT = IRI(NS + "Belt")
 BELT1 = IRI(NS + "belt1")
 HAS_SPEED = IRI(NS + "hasSpeed")
@@ -238,7 +238,7 @@ class TestOGMOntologyError:
 
         assert (
             str(caught.value)
-            == "Class https://example.org/errors#Belt has no rdf:type defined."
+            == "Class http://example.org/errors#Belt has no rdf:type defined."
         )
         assert caught.value.class_iri == BELT
         assert caught.value.property_iri is None
@@ -283,7 +283,7 @@ class TestOGMNotFoundError:
 
         assert (
             str(caught.value)
-            == "Could not determine class IRI for instance https://example.org/errors#belt1"
+            == "Could not determine class IRI for instance http://example.org/errors#belt1"
         )
         assert caught.value.iri == BELT1
 
@@ -329,7 +329,7 @@ class TestOGMUsageError:
             )
 
         assert str(caught.value) == (
-            "Two changes name https://example.org/errors#belt1. "
+            "Two changes name http://example.org/errors#belt1. "
             "Put all changes to one instance in one change."
         )
         assert not isinstance(caught.value, TypeError)
@@ -522,7 +522,7 @@ SOURCE = Path(kapps_ogm.__file__).parent
 NOT_ONE_OF_THE_FOUR = {
     # The value kind of a PropertySpec is one of the three members of PropertyValueKind.
     ("mapping/property_spec.py", "to_pydantic_field", "ValueError"),
-    ("ogm.py", "fetch", "ValueError"),
+    ("ogm.py", "_fetch", "ValueError"),
     ("utils/blank_instance.py", "_blank_value_for_property", "ValueError"),
     # The Skolem namespace given to the OGM, which mints its anonymous nodes' IRIs.
     ("utils/skolem.py", "validate_skolem_namespace", "ValueError"),

@@ -4,6 +4,7 @@ from .ogm import OGM, Append, Create, Update
 # Import mapping specs
 from .mapping.class_spec import ClassSpec
 from .mapping.property_spec import PropertySpec
+from .mapping.interfaces import Interface
 
 # Import utilities
 from .utils import (
@@ -27,6 +28,7 @@ __all__ = [
     "Create",
     "Update",
     "Append",
+    "Interface",
     # Mapping specs
     "ClassSpec",
     "PropertySpec",

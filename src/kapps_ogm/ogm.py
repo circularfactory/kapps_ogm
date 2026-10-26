@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Optional, Sequence, Union, cast, overload
 import logging
 import warnings
 import pydantic as pd
-from rdflib import BNode, Literal
+from rdflib import BNode, Literal, URIRef
 
 from kapps_triplestore_interface import IRI, SPARQLQuery, TripleStore
 from kapps_triplestore_interface.utils.types import (
@@ -17,6 +17,12 @@ from kapps_triplestore_interface.utils.types import (
 from kapps_ogm.node.core import Node
 from kapps_ogm.node.node_address import reconcile_anonymous_addresses
 from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
+from kapps_ogm.mapping.interfaces import (
+    DEFAULT_RESOLUTION,
+    Interface,
+    InterfaceResolution,
+    evidenced_interfaces,
+)
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from kapps_ogm.utils.blank_instance import _create_blank_instance
 from kapps_ogm.utils.loader_strategy import LoaderStrategy
@@ -52,12 +58,15 @@ class Create:
         instance_iri: Optional IRI for the new instance. Give it when another change in the
             same call refers to the new instance. Otherwise the IRI is minted during the call.
         class_scope: Optional ClassScope, as for OGM.create
+        interfaces: Interfaces declared for the parameter properties of the new instance, as
+            for OGM.create
     """
 
     class_iri: IRI
     data: dict
     instance_iri: Optional[IRI] = None
     class_scope: Optional[ClassScope] = None
+    interfaces: Sequence[Interface] = ()
 
 
 @dataclass(frozen=True)
@@ -70,10 +79,19 @@ class Update:
         data: Data dictionary, as for a commit of one instance. Each property it names replaces
             the stored values of that property, and [] removes the property. A property it
             does not name keeps its stored values.
+        interfaces: Interfaces declared for the parameter properties of the instance. They
+            merge with the interfaces that the stored nodes give as evidence. For a property
+            whose declarations are authoritative, the evidence is ignored, and the stored
+            values of a property that only an evidenced interface restricts are removed.
+        merge_depth: The merge depth of the shape the data is compared with, as for
+            OGM.fetch. A property below the depth is not in the shape, so its stored values
+            stay as they are: data fetched at a depth goes back at the same depth.
     """
 
     instance_iri: IRI
     data: dict
+    interfaces: Sequence[Interface] = ()
+    merge_depth: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -200,6 +218,60 @@ def _carrier_iri(
     return None
 
 
+def _without_stale(
+    declared: ClassSpec, fetched: ClassSpec, resolution: InterfaceResolution
+) -> ClassSpec:
+    """``fetched``, the shape a write's fetch resolved, with each authoritatively declared
+    parameter property back in its declared shape: an authoritative declaration takes no
+    evidence, so the fetch widened it only by the properties the declaration makes stale."""
+    replaced: dict[IRI, PropertySpec] = {}
+    for prop, prop_spec in fetched.properties.items():
+        declared_spec = declared.properties.get(prop)
+        if declared_spec is None or prop_spec is declared_spec:
+            continue
+        if prop_spec.value_kind is PropertyValueKind.COMPLEX:
+            if prop in resolution.authoritative:
+                replaced[prop] = declared_spec
+        elif (
+            prop_spec.value_kind is PropertyValueKind.OBJECT
+            and prop_spec.nested is not None
+            and declared_spec.nested is not None
+        ):
+            nested = _without_stale(declared_spec.nested, prop_spec.nested, resolution)
+            if nested is not prop_spec.nested:
+                replaced[prop] = replace(prop_spec, nested=nested)
+    if not replaced:
+        return fetched
+    return replace(fetched, properties={**fetched.properties, **replaced})
+
+
+def _evidenced_and_left_out(
+    declared: ClassSpec, resolved: ClassSpec, node: Node
+) -> set[tuple[Any, IRI]]:
+    """The pairs of a parameter node and a property that only evidence put into the shape of
+    ``resolved``, where the data of ``node`` does not name the property for that node."""
+    left_out: set[tuple[Any, IRI]] = set()
+    for prop, prop_spec in resolved.properties.items():
+        declared_spec = declared.properties.get(prop)
+        values = [v for v in (node.data or {}).get(prop) or [] if isinstance(v, Node)]
+        if declared_spec is None or prop_spec is declared_spec or not values:
+            continue
+        if prop_spec.value_kind is PropertyValueKind.OBJECT:
+            if prop_spec.nested is not None and declared_spec.nested is not None:
+                for value in values:
+                    left_out |= _evidenced_and_left_out(
+                        declared_spec.nested, prop_spec.nested, value
+                    )
+            continue
+        evidenced_only = set(prop_spec.nested.properties if prop_spec.nested else ()) - set(
+            declared_spec.nested.properties if declared_spec.nested else ()
+        )
+        for value in values:
+            named = {IRI(key) for key in (value.data or {}) if key != "id"}
+            left_out |= {(value.id, extra) for extra in evidenced_only - named}
+    return left_out
+
+
 class OGM:
     """The object-graph mapper: instance data of a triple store as pydantic models.
 
@@ -260,12 +332,29 @@ class OGM:
         class_iri: IRI,
         class_scope: Optional[ClassScope] = None,
         hydration_level: ClassHydrationLevel = ClassHydrationLevel.SCOPE,
+        interfaces: Optional[Sequence[Interface]] = None,
+        merge_depth: Optional[int] = None,
     ) -> ClassSpec:
         """
         Resolve a ClassSpec for a given class IRI and ClassScope.
 
         ClassScope defines selective hydration of nested properties.
+
+        Args:
+            interfaces: Interfaces to resolve parameter properties with, wherever the scope
+                reaches them: each resolves its property as if it were ``rdfs:subPropertyOf``
+                its interface. Without an instance there is no evidence, so these and the
+                ``rdfs:subPropertyOf`` assertions are the only interfaces.
+            merge_depth: How many levels of each interface hierarchy to merge, counted from its
+                most general property. ``1`` gives the user-facing view, without connection
+                details; ``None``, the default, merges every level.
+
+        Raises:
+            OGMUsageError: If ``interfaces`` holds an entry that is not an ``Interface``, if
+                the declarations of one property disagree on ``authoritative``, or if
+                ``merge_depth`` is negative. Fix the call.
         """
+        resolution = InterfaceResolution.of(interfaces, merge_depth)
         class_scope = self._given_or_loader_scope(class_iri, class_scope)
         self.logger.debug(
             "Resolving ClassSpec for %s (chain=%s, hydration_level=%s)",
@@ -279,14 +368,197 @@ class OGM:
             ogm=self,
             class_scope=class_scope,
             hydration_level=hydration_level,
+            _interfaces=resolution,
         )
         return spec
+
+    def _resolved_class_spec(
+        self,
+        *,
+        class_iri: IRI,
+        class_scope: Optional[ClassScope],
+        resolution: InterfaceResolution,
+    ) -> ClassSpec:
+        """``get_class_spec`` at the SCOPE level under ``resolution``. The declarations and
+        the depth are passed only when there are any, so a call without them is the plain
+        one."""
+        extra: dict[str, Any] = {}
+        if resolution.declared:
+            extra["interfaces"] = resolution.to_interfaces()
+        if resolution.merge_depth is not None:
+            extra["merge_depth"] = resolution.merge_depth
+        return self.get_class_spec(
+            class_iri=class_iri,
+            class_scope=class_scope,
+            hydration_level=ClassHydrationLevel.SCOPE,
+            **extra,
+        )
+
+    def _with_evidence(
+        self,
+        spec: ClassSpec,
+        data: dict,
+        resolution: InterfaceResolution,
+        stale_triples: Optional[dict] = None,
+    ) -> ClassSpec:
+        """``spec`` with the interfaces that the stored parameter nodes in ``data`` give as
+        evidence, at every position of the scope.
+
+        A parameter node is evidence for each interface whose range restricts a property the
+        node carries and the shape does not declare. A property whose declarations are
+        authoritative takes no evidence. With ``stale_triples``, which a write passes, its shape
+        takes the properties that the declaration makes stale instead, and ``stale_triples``
+        collects their stored values, so that the values a write removes are read by the fetch.
+        ``spec`` is not changed: a changed position is a copy, and so is each ClassSpec above
+        it. The nodes at one position share one shape, the union of their interfaces, because
+        one field of a model has one type."""
+        replaced: dict[IRI, PropertySpec] = {}
+        for prop, prop_spec in spec.properties.items():
+            values = [value for value in data.get(prop) or [] if isinstance(value, Node)]
+            if not values or prop_spec.nested is None:
+                continue
+            if prop_spec.value_kind is PropertyValueKind.COMPLEX:
+                if prop in resolution.authoritative:
+                    if stale_triples is not None:
+                        widened = self._with_stale(
+                            spec, prop, values, resolution, stale_triples
+                        )
+                        if widened is not prop_spec:
+                            replaced[prop] = widened
+                    continue
+                found = self._evidence(prop, prop_spec, values)
+                declared = resolution.interfaces_of(prop)
+                if found - declared:
+                    respecified = spec._with_interfaces(
+                        prop,
+                        InterfaceResolution(
+                            declared={prop: declared | found},
+                            merge_depth=resolution.merge_depth,
+                        ),
+                        self,
+                    )
+                    replaced[prop] = respecified.properties[prop]
+            elif prop_spec.value_kind is PropertyValueKind.OBJECT:
+                merged: dict = {}
+                for value in values:
+                    for key, nested_values in (value.data or {}).items():
+                        merged.setdefault(key, []).extend(nested_values)
+                nested = self._with_evidence(
+                    prop_spec.nested, merged, resolution, stale_triples
+                )
+                if nested is not prop_spec.nested:
+                    replaced[prop] = replace(prop_spec, nested=nested)
+        if not replaced:
+            return spec
+        return replace(spec, properties={**spec.properties, **replaced})
+
+    def _with_stale(
+        self,
+        spec: ClassSpec,
+        prop: IRI,
+        nodes: list[Node],
+        resolution: InterfaceResolution,
+        stored: dict,
+    ) -> PropertySpec:
+        """The PropertySpec of ``prop`` in ``spec``, an authoritatively declared parameter
+        property, widened by the properties that its declaration makes stale.
+
+        A property is stale when an interface that ``nodes``, its stored values, give as
+        evidence restricts it and the declared interfaces, at every depth, do not hold it. Any
+        other property a node carries, one that no interface restricts, is not. A write
+        materializes its data in the shape without them, and removes their values.
+
+        ``stored`` gets, for each node and stale property it carries, the triples as the store
+        holds them: a literal keeps its datatype and language, so a delete of it matches. A
+        node still in the store's blank-node form gets none: the write relocates it to a Skolem
+        IRI and leaves its other triples behind."""
+        prop_spec = spec.properties[prop]
+        declared = resolution.interfaces_of(prop)
+        selected = prop_spec
+        if resolution.merge_depth is not None:
+            selected = spec._with_interfaces(
+                prop, InterfaceResolution(declared={prop: declared}), self
+            ).properties[prop]
+        found = self._evidence(prop, selected, nodes) - declared
+        if not found or prop_spec.nested is None:
+            return prop_spec
+        evidenced = spec._with_interfaces(
+            prop, InterfaceResolution(declared={prop: found}), self
+        ).properties[prop]
+        kept = set(selected.nested.properties) if selected.nested else set()
+        restricted = evidenced.nested.properties if evidenced.nested else {}
+        stale_specs = {key: value for key, value in restricted.items() if key not in kept}
+        if not stale_specs:
+            return prop_spec
+        for node in nodes:
+            carried = set(stale_specs) & set(node.data or {})
+            if not carried:
+                continue
+            terms = (
+                self._stored_terms(node.id, carried) if isinstance(node.id, IRI) else set()
+            )
+            for key in carried:
+                stored[(node.id, key)] = {term for term in terms if term[1] == key}
+        nested = prop_spec.nested
+        return replace(
+            prop_spec, nested=replace(nested, properties={**nested.properties, **stale_specs})
+        )
+
+    def _stored_terms(self, subject: IRI, predicates: set[IRI]) -> set:
+        """The explicit triples of ``subject`` with one of ``predicates``, as the store holds
+        them: a literal keeps its datatype and language, so a delete of it matches."""
+        query = SPARQLQuery.select(
+            variables=["?property", "?value"],
+            where_clauses=[
+                f"<{subject}> ?property ?value .",
+                "VALUES ?property { "
+                + " ".join(f"<{prop}>" for prop in sorted(predicates))
+                + " }",
+            ],
+            include_implicit=False,
+        )
+        bindings = (
+            cast(dict, self.db.query(query.to_string(validate=False)))
+            .get("results", {})
+            .get("bindings", [])
+        )
+        terms = set()
+        for binding in bindings:
+            value = binding["value"]
+            if value["type"] == "uri":
+                obj: Any = IRI(value["value"])
+            elif value["type"] == "literal":
+                datatype = value.get("datatype")
+                obj = Literal(
+                    value["value"],
+                    lang=value.get("xml:lang"),
+                    datatype=URIRef(datatype) if datatype else None,
+                )
+            else:
+                continue
+            terms.add((subject, IRI(binding["property"]["value"]), obj))
+        return terms
+
+    def _evidence(
+        self, prop: IRI, prop_spec: PropertySpec, nodes: list[Node]
+    ) -> frozenset[IRI]:
+        """The interfaces that ``nodes``, the stored values of the parameter property
+        ``prop``, give as evidence against the shape of ``prop_spec``."""
+        declared = set(prop_spec.nested.properties) if prop_spec.nested else set()
+        carried = {
+            IRI(key)
+            for node in nodes
+            for key in (node.data or {})
+            if key != "id"
+        }
+        return evidenced_interfaces(self, prop, carried - declared - {RDF_TYPE})
 
     def _data_class_spec(
         self,
         node: Node,
         class_iri: IRI,
         class_scope: Optional[ClassScope],
+        resolution: InterfaceResolution = DEFAULT_RESOLUTION,
     ) -> ClassSpec:
         """The ClassSpec of ``class_iri`` in ``class_scope``, for the data of ``node``.
 
@@ -295,10 +567,10 @@ class OGM:
         not know the instance. The error that leaves here names the instance whose data carries
         the property, which may be a nested one."""
         try:
-            return self.get_class_spec(
+            return self._resolved_class_spec(
                 class_iri=class_iri,
                 class_scope=class_scope,
-                hydration_level=ClassHydrationLevel.SCOPE,
+                resolution=resolution,
             )
         except OGMDataError as error:
             if error.instance_iri is None:
@@ -322,6 +594,7 @@ class OGM:
         instance_iri: Optional[IRI] = None,
         persist: bool = True,
         named_graph: Optional[GraphNameLike] = None,
+        interfaces: Optional[Sequence[Interface]] = None,
     ) -> Node:
         """
         Create a new Node instance with given data.
@@ -346,6 +619,10 @@ class OGM:
             instance_iri: Optional IRI for the new instance (if not provided, a new one will be generated)
             persist: Whether to persist the new instance to the graph database
             named_graph: Optional named graph to persist the new instance to
+            interfaces: Interfaces declared for the parameter properties of the new
+                instance. A new node carries no metadata yet, so a declaration is what gives
+                it the shape of an interface, and lets the write persist its connection
+                metadata.
         Returns:
             Node representing the newly created instance
         Raises:
@@ -357,8 +634,8 @@ class OGM:
                 subclass ``PropertyOutsideScopeError``, which also has ``scope``.
             OGMOntologyError: If the ontology has a shape that the OGM cannot map. Repair.
             OGMUsageError: If the call is malformed, for example data that is not a dictionary
-                of lists, or data with properties and no class scope to give or derive. Fix
-                the call.
+                of lists, data with properties and no class scope to give or derive, or an
+                ``interfaces`` entry that is not an ``Interface``. Fix the call.
             pydantic.ValidationError: If the data does not fit the generated model. It
                 propagates unchanged.
             kapps_triplestore_interface.exceptions.PreconditionFailedError: If an instance it
@@ -387,6 +664,7 @@ class OGM:
             data=data,
             class_scope=class_scope,
             instance_iri=instance_iri,
+            resolution=InterfaceResolution.of(interfaces),
         )
 
         if persist:
@@ -406,6 +684,7 @@ class OGM:
         data: dict,
         class_scope: Optional[ClassScope],
         instance_iri: Optional[IRI],
+        resolution: InterfaceResolution = DEFAULT_RESOLUTION,
     ) -> Node:
         """A materialized Node for a new instance. Nothing is written.
 
@@ -427,7 +706,7 @@ class OGM:
             data=data,
             ogm=self,
         )
-        node.class_spec = self._data_class_spec(node, class_iri, class_scope)
+        node.class_spec = self._data_class_spec(node, class_iri, class_scope, resolution)
 
         # A write refuses a property that the class does not declare, before anything is sent.
         node.materialize(refuse_unknown=True)
@@ -518,7 +797,7 @@ class OGM:
             include_implicit=False,
         )
         query_result = (
-            self.db.query(query, convert_bindings=True)
+            self.db.query(query.to_string(validate=False), convert_bindings=True)
             .get("results", {})
             .get("bindings", [])
         )
@@ -582,9 +861,20 @@ class OGM:
         class_scope: Optional[ClassScope] = None,
         as_reference: bool = False,
         materialize: bool = False,
+        interfaces: Optional[Sequence[Interface]] = None,
+        merge_depth: Optional[int] = None,
+        _evidence: Optional[InterfaceResolution] = None,
     ) -> Node:
         """
         Fetch an existing RDF instance from the database and return a Node for that instance.
+
+        Without ``class_spec``, the shape of each parameter node is resolved for this instance:
+        its parameter property's range, merged with the range of every interface that the
+        stored node gives as evidence, that ``interfaces`` declares, or that an
+        ``rdfs:subPropertyOf`` assertion names. A node gives an interface as evidence when it
+        carries a property that the interface's range restricts. ``merge_depth`` selects the
+        view: ``1`` merges only the most general level of each interface hierarchy, so the
+        connection details on a protocol interface are absent from the model.
 
         Args:
             instance_iri: IRI of the instance to fetch
@@ -593,9 +883,18 @@ class OGM:
             as_reference: If True, fetch only the IRI without loading properties
             materialize: If True, materialize the Node's data according to the ClassSpec.
                 Ignored if as_reference is True.
+            interfaces: Interfaces declared for parameter properties, as for
+                ``get_class_spec``. An authoritative declaration ignores the evidence of its
+                property.
+            merge_depth: How many levels of each interface hierarchy to merge, as for
+                ``get_class_spec``. ``None``, the default, merges every level.
+            _evidence: The interface resolution under which a given ``class_spec`` takes
+                the evidence of the stored nodes, so that a write reads it inside this
+                fetch. Internal.
 
         Returns:
-            Node representing the fetched instance
+            Node representing the fetched instance. Its ClassSpec is the given one, or the one
+            resolved for this instance, which no other instance shares.
 
         Raises:
             AnonymousNodeFetchError: If instance_iri is a Skolem IRI. Such a node is anonymous:
@@ -606,9 +905,42 @@ class OGM:
             OGMDataError: If ``class_scope`` names a property that the class does not have, or
                 continues a property chain past a property with a literal range. Refused.
             OGMOntologyError: If the ontology has a shape that the OGM cannot map. Repair.
+            OGMUsageError: If ``interfaces`` or ``merge_depth`` is given with ``class_spec``,
+                which is used as given. Fix the call.
             kapps_triplestore_interface.exceptions.TripleStoreInterfaceError: If the triple
                 store interface or the store refuses a read. It propagates unchanged.
         """
+        if class_spec is not None and (interfaces or merge_depth is not None):
+            raise OGMUsageError(
+                "fetch() uses a given class_spec as it is, so it takes no interfaces and no "
+                "merge_depth with it. Resolve them with get_class_spec, or leave out class_spec."
+            )
+        return self._fetch(
+            instance_iri=instance_iri,
+            class_spec=class_spec,
+            class_scope=class_scope,
+            as_reference=as_reference,
+            materialize=materialize,
+            resolution=(
+                _evidence
+                if _evidence is not None
+                else InterfaceResolution.of(interfaces, merge_depth)
+            ),
+            evidence_for_given_spec=_evidence is not None,
+        )
+
+    def _fetch(
+        self,
+        *,
+        instance_iri: IRI,
+        class_spec: Optional[ClassSpec],
+        class_scope: Optional[ClassScope],
+        as_reference: bool,
+        materialize: bool,
+        resolution: InterfaceResolution,
+        evidence_for_given_spec: bool = False,
+    ) -> Node:
+        """``fetch`` under an interface resolution, which a write passes on too."""
         if is_skolem_iri(instance_iri):
             raise AnonymousNodeFetchError(
                 f"{instance_iri} is an anonymous node — fetch its parent instead. "
@@ -636,11 +968,17 @@ class OGM:
                     class_iri,
                     class_iri_set,
                 )
-            class_spec = self.get_class_spec(
+            class_spec = self._resolved_class_spec(
                 class_iri=class_iri,
                 class_scope=class_scope,
-                hydration_level=ClassHydrationLevel.SCOPE,
+                resolution=resolution,
             )
+            resolve_evidence = True
+        else:
+            # A given ClassSpec is used as it is: a caller that passes a projection of its own
+            # must not get back fields it left out. A write passes its own spec and asks for
+            # the evidence.
+            resolve_evidence = evidence_for_given_spec
 
         data = {}
         if not as_reference:
@@ -683,6 +1021,12 @@ class OGM:
             instance=None,  # instance can be materialized later if needed
             ogm=self,
         )
+        if resolve_evidence and not as_reference:
+            stale_triples: Optional[dict] = {} if evidence_for_given_spec else None
+            node.class_spec = self._with_evidence(
+                class_spec, node.data or {}, resolution, stale_triples
+            )
+            node._stale = stale_triples or {}
 
         if not as_reference and materialize:
             node.materialize()
@@ -860,6 +1204,7 @@ class OGM:
                     data=change.data,
                     class_scope=change.class_scope,
                     instance_iri=change.instance_iri,
+                    resolution=InterfaceResolution.of(change.interfaces),
                 )
                 added = set(node.to_triples(links_from_data=True))
                 # A create that lands on an existing instance would merge into it, because an
@@ -877,7 +1222,11 @@ class OGM:
                 removed = set()
             else:
                 node, removed, added = self._changed_node(
-                    instance_iri=IRI(change.instance_iri), data=change.data
+                    instance_iri=IRI(change.instance_iri),
+                    data=change.data,
+                    resolution=InterfaceResolution.of(
+                        change.interfaces, change.merge_depth
+                    ),
                 )
             # Each change is compared with the stored state on its own, so two changes that
             # write one instance would each apply their own diff to it. The guard above sees only
@@ -931,11 +1280,16 @@ class OGM:
         *,
         instance_iri: IRI,
         data: dict,
+        resolution: InterfaceResolution = DEFAULT_RESOLUTION,
     ) -> tuple[Node, set, set]:
         """The Node that ``data`` makes of a stored instance, and the triples to remove and to
-        add. Nothing is written."""
+        add. Nothing is written.
+
+        The shape of each parameter node is resolved as a fetch resolves it: the stored nodes
+        give their interfaces as evidence, so data that a fetch gave goes back without a
+        refusal. The evidence comes from the store only, never from ``data``."""
         new_node = Node(id=instance_iri, data=data, ogm=self)
-        class_spec, class_scope = self._stored_class_spec(new_node)
+        class_spec, class_scope = self._stored_class_spec(new_node, resolution)
         new_node.class_spec = class_spec
 
         # Fetch before materializing, so the addresses of the anonymous nodes already in the store
@@ -944,20 +1298,41 @@ class OGM:
         # model_dump(), edit, commit cycle arrives here with none. Without this the commit would
         # mint fresh addresses, delete the existing nodes and strand every triple the ClassSpec
         # does not declare — connection metadata included — on nodes nothing points at.
+        # The read and its evidence go through the public fetch, so a tracer that wraps the
+        # public methods counts them below it.
         old_node = self.fetch(
             instance_iri=instance_iri,
-            class_spec=new_node.class_spec,
+            class_spec=class_spec,
             class_scope=class_scope,
-            materialize=True,
+            _evidence=resolution,
         )
+        declared_spec = class_spec
+        # The fetched shape holds the properties that an authoritative declaration makes stale;
+        # the data is materialized without them, so the diff removes their stored values and a
+        # value of one in the data is refused.
+        class_spec = _without_stale(
+            declared_spec, cast(ClassSpec, old_node.class_spec), resolution
+        )
+        new_node.class_spec = class_spec
+        old_node.materialize()
         reconcile_anonymous_addresses(old=old_node, new=new_node)
 
         new_node.materialize(refuse_unknown=True)
 
-        old_triples, new_triples = old_node.diff(other=new_node)
+        removed, new_triples = old_node.diff(other=new_node)
+        # Evidence widens what the data may hold; it does not make a property the data leaves
+        # out a property to remove. Such a property keeps its stored values, as it did when it
+        # was outside the shape.
+        kept = _evidenced_and_left_out(declared_spec, class_spec, new_node)
+        # The values of a stale property are removed as the store holds them, since a literal
+        # serialized from the model can differ from the stored one in its datatype.
+        skipped = kept | old_node._stale.keys()
+        old_triples = {
+            triple for triple in removed if (triple[0], IRI(triple[1])) not in skipped
+        }.union(*old_node._stale.values())
 
-        # Merge note: origin/paper logged the full turtle at INFO. Kept the richer
-        # content but moved to DEBUG and guarded, because a library that dumps every
+        # An earlier version logged the full turtle at INFO. The richer content is kept,
+        # but moved to DEBUG and guarded, because a library that dumps every
         # triple on every commit is unusable for a consumer that commits per
         # operation-status change — and the f-string would render the turtle even
         # when the level suppresses it.
@@ -968,7 +1343,9 @@ class OGM:
 
         return new_node, old_triples, new_triples
 
-    def _stored_class_spec(self, node: Node) -> tuple[ClassSpec, ClassScope]:
+    def _stored_class_spec(
+        self, node: Node, resolution: InterfaceResolution = DEFAULT_RESOLUTION
+    ) -> tuple[ClassSpec, ClassScope]:
         """The ClassSpec of the stored instance that ``node`` names, hydrated to the scope of
         the node's data, and that scope."""
         instance_iri = cast(IRI, node.id)
@@ -989,7 +1366,7 @@ class OGM:
             )
 
         class_scope = ClassScope.from_node_data(node)
-        class_spec = self._data_class_spec(node, class_iri, class_scope)
+        class_spec = self._data_class_spec(node, class_iri, class_scope, resolution)
         return class_spec, class_scope
 
     def _appended_node(self, change: Append) -> tuple[Node, set, PropertySpec]:

@@ -24,10 +24,16 @@ Python 3.12 or later. You also need a reachable triple store — this library ma
 one, it does not embed one. The client is `kapps-triplestore-interface`, which installs as a
 dependency; you do not need to install it yourself.
 
+The mapper reads its classes from the ontology in the store and never loads an ontology itself. In
+a productive circular factory the ontologies and shapes are already in the knowledge graph; the
+ones shipped with the libraries seed demonstrations and tests.
+
 ## A round-trip example
 
 Write an instance, read it back, and compare. Nothing here names a host: the connection comes
 from the environment.
+
+The example assumes the store already holds the ontology that declares its classes.
 
 The OGM takes any store of the triple store interface's contract, `TripleStore`, and `connect()`
 gives you one. It checks that the store answers, accepts the identity and has the dataset before
@@ -43,7 +49,7 @@ from kapps_triplestore_interface import IRI, GDBTokenAuth, TripleStoreEndpoint, 
 from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.class_scope import ClassScope
 
-ONTOLOGY = "https://example.org/ontology#"
+ONTOLOGY = "http://example.org/ontology#"
 
 store = connect(TripleStoreEndpoint.from_env(), GDBTokenAuth.from_env())
 ogm = OGM(db=store)
@@ -300,12 +306,53 @@ The minting authority is an ontology-governance decision rather than this librar
 namespace is configurable per instance and the default is a documented placeholder:
 
 ```python
-ogm = OGM(db=store, skolem_namespace="https://example.org/.well-known/genid/")
+ogm = OGM(db=store, skolem_namespace="http://example.org/.well-known/genid/")
 ```
 
 The `/.well-known/genid/` path itself is not configurable. A namespace without it would mint
 addresses this library could no longer recognise as Skolem IRIs, which would silently disable the
 guard rather than fail, so it is rejected at construction.
+
+## Interfaces of a parameter node
+
+A parameter property, such as a belt's speed, gives its anonymous node the domain shape: a value
+and its unit. How a machine is reached, over MQTT or OPC UA, is not a fact of its class. So the
+connection details come from an **interface**: a property whose own `rdfs:range` restricts them.
+The mapper resolves the interfaces of each node per instance, and merges all of them:
+
+- **Evidence.** A stored node that carries a property an interface's range restricts gets that
+  interface's shape, with no declaration in the ontology.
+- **A declaration.** `Interface(property_iri, interface_iri)` resolves the property as if it were
+  `rdfs:subPropertyOf` the interface. A first write needs it, since the node carries nothing yet.
+- **An `rdfs:subPropertyOf` assertion** in the ontology, for hardware whose protocol is fixed.
+
+```python
+from kapps_ogm import Interface, Update
+
+# The first write: the declaration gives the node the MQTT shape, so its topic is accepted.
+ogm.create(class_iri=BELT, data=data, interfaces=[Interface(HAS_SPEED, MQTT_PARAMETER)])
+
+# A user-facing read: only the most general interface level, so no broker and no topic.
+node = ogm.fetch(instance_iri=belt, class_scope=scope, merge_depth=1, materialize=True)
+
+# The same depth on the way back leaves the connection details as they are.
+ogm.commit(changes=[Update(instance_iri=belt, data=edited, merge_depth=1)])
+
+# A protocol migration: the OPC UA shape alone, and the stale MQTT values are removed.
+ogm.commit(changes=[Update(instance_iri=belt, data=migrated,
+                           interfaces=[Interface(HAS_SPEED, OPCUA_PARAMETER, authoritative=True)])])
+```
+
+`merge_depth` counts the levels of the interface hierarchy from its most general property, which
+is at level 1. This works as a projection when the ontology puts the content a peer may see on
+the general interface and the connection details on the protocol interfaces below it. The depth
+applies to every superproperty of the parameter property, so a parameter property that is itself
+a subproperty of another domain property loses that property's range at a depth below its level.
+A `ClassSpec` given to `fetch` is used as it is.
+
+Evidence is matched to every property whose own range restricts a property the node carries and
+its shape does not declare. An ontology in which a domain property restricts such a property too
+gives that domain property's range to the node as well.
 
 ## Contributing
 

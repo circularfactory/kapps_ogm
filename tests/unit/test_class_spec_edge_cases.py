@@ -62,7 +62,7 @@ class TestClassSpecValidation:
     ):
         """Test that specifying non-Class IRI raises ValueError."""
         # Setup: IRI that is not a Class
-        non_class_iri = IRI("https://example.org/NotAClass")
+        non_class_iri = IRI("http://example.org/NotAClass")
         mock_db.triples_get.return_value = [
             (non_class_iri, IRI("rdf:type"), IRI("owl:Thing"))  # Not owl:Class
         ]
@@ -83,7 +83,7 @@ class TestClassSpecSerialization:
         """Test to_string() includes property information."""
         # Setup: Real PropertySpec (not mock) to avoid iteration issues
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/prop1"),
+            iri=IRI("http://example.org/prop1"),
             value_kind="literal",
             python_range_type=str,
             min_count=None,
@@ -94,7 +94,7 @@ class TestClassSpecSerialization:
         class_spec = ClassSpec(
             iri=TRANSFER_UNIT_IRI,
             types=[IRI("owl:Class")],
-            properties={IRI("https://example.org/prop1"): prop_spec},
+            properties={IRI("http://example.org/prop1"): prop_spec},
         )
 
         # Execute

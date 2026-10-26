@@ -18,7 +18,7 @@ from kapps_triplestore_interface.exceptions import PreconditionFailedError
 from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.class_scope import ClassScope
 
-NS = "https://example.org/truth#"
+NS = "http://example.org/truth#"
 MEASUREMENT = IRI(NS + "Measurement")
 WORKPIECE = IRI(NS + "Workpiece")
 METER = IRI(NS + "Meter")

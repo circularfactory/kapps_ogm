@@ -17,7 +17,7 @@ from kapps_ogm import Create, Update
 from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.errors import OGMDataError
 
-NS = "https://example.org/refusedwrite#"
+NS = "http://example.org/refusedwrite#"
 SENSOR = IRI(NS + "Sensor")
 NAME = IRI(NS + "name")
 COLOUR = IRI(NS + "colour")

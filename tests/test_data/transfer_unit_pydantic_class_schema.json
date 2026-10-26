@@ -3,17 +3,17 @@
     "kapps_ogm__builders__mapping__class_spec__AnonymousClass__1": {
       "properties": {
         "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue": {
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "description": "PropertySpec for http://www.sfb1574.kit.edu/ontologies/inf#hasValue",
           "items": {},
           "minItems": 1,
-          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "title": "http://www.sfb1574.kit.edu/ontologies/inf#hasValue",
           "type": "array"
         },
         "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasUnit": {
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "description": "PropertySpec for http://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
           "items": {},
           "minItems": 1,
-          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "title": "http://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
           "type": "array"
         }
       },
@@ -27,17 +27,17 @@
     "kapps_ogm__builders__mapping__class_spec__AnonymousClass__2": {
       "properties": {
         "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasUnit": {
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "description": "PropertySpec for http://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
           "items": {},
           "minItems": 1,
-          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "title": "http://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
           "type": "array"
         },
         "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue": {
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "description": "PropertySpec for http://www.sfb1574.kit.edu/ontologies/inf#hasValue",
           "items": {},
           "minItems": 1,
-          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "title": "http://www.sfb1574.kit.edu/ontologies/inf#hasValue",
           "type": "array"
         }
       },
@@ -51,17 +51,17 @@
     "kapps_ogm__builders__mapping__class_spec__AnonymousClass__3": {
       "properties": {
         "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue": {
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "description": "PropertySpec for http://www.sfb1574.kit.edu/ontologies/inf#hasValue",
           "items": {},
           "minItems": 1,
-          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "title": "http://www.sfb1574.kit.edu/ontologies/inf#hasValue",
           "type": "array"
         },
         "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasUnit": {
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "description": "PropertySpec for http://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
           "items": {},
           "minItems": 1,
-          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "title": "http://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
           "type": "array"
         }
       },
@@ -87,8 +87,8 @@
             }
           ],
           "default": null,
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition",
-          "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"
+          "description": "PropertySpec for http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition",
+          "title": "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"
         },
         "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorSpeed": {
           "anyOf": [
@@ -103,8 +103,8 @@
             }
           ],
           "default": null,
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed",
-          "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"
+          "description": "PropertySpec for http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed",
+          "title": "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"
         }
       },
       "title": "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_ConveyorBelt",
@@ -125,8 +125,8 @@
             }
           ],
           "default": null,
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied",
-          "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied"
+          "description": "PropertySpec for http://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied",
+          "title": "http://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied"
         }
       },
       "title": "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_LightBarrier",
@@ -147,8 +147,8 @@
         }
       ],
       "default": null,
-      "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt",
-      "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"
+      "description": "PropertySpec for http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt",
+      "title": "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"
     },
     "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasLightBarrier": {
       "anyOf": [
@@ -163,8 +163,8 @@
         }
       ],
       "default": null,
-      "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier",
-      "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"
+      "description": "PropertySpec for http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier",
+      "title": "http://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"
     }
   },
   "title": "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_TransferUnit",

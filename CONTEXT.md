@@ -42,6 +42,34 @@ is kept only as an entry point for a later extension. The public `delete` is a d
 of it for one release.
 _Avoid_: delete (as a public method)
 
+**Interface** _(interim name)_:
+A property whose own `rdfs:range` adds to the shape of a parameter node, for example the
+connection details of one protocol. It contributes to one node, resolved per instance, from three
+sources merged as a union: **evidence** (the stored node carries a property that the interface's
+range restricts and the shape does not declare), a **declaration** (an `Interface` entry, which
+resolves the parameter property as if it were `rdfs:subPropertyOf` the interface), and an
+`rdfs:subPropertyOf` assertion in the ontology. In code, the `Interface` entry of `get_class_spec`,
+`fetch`, `create`, `Create` and `Update`. An `Update` whose data leaves out a property that only
+evidence put into the shape keeps that property's stored values; only an authoritative declaration
+removes them.
+_Avoid_: protocol (one kind of interface), connector (what the middleware wires to it)
+
+**Authoritative declaration** _(interim name)_:
+An `Interface` declared with `authoritative=True`. The declarations of its parameter property then
+select the shape alone, and the evidence is ignored. An `Update` removes the stored values of the
+properties that only an evidenced interface restricts, in the same write; a property that no
+interface restricts stays. It is how a machine moves from one protocol to another.
+_Avoid_: override, precedence (two evidenced interfaces are both merged, never ranked)
+
+**Merge depth** _(interim name)_:
+How many levels of each interface hierarchy are merged into a parameter node's shape, counted from
+the most general property down. A property without a superproperty is at level 1, and each other
+property is one level below its deepest superproperty. The parameter property's own range is always
+merged. Depth 1 is the user-facing view, which has no connection details when the ontology puts
+them on the protocol interfaces; no depth (the default) is the wiring view. In code, the
+`merge_depth` keyword of `get_class_spec`, `fetch` and `Update`.
+_Avoid_: scope (that selects properties, not levels), level (one step of the hierarchy, not the count)
+
 ## How the mapper treats the terms
 
 **A single-valued property** gives a list of at most one, as every property gives a list: `[value]`,

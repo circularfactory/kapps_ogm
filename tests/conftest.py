@@ -55,11 +55,10 @@ that other code loaded into the dataset are gone after a run, and that code must
 A dataset without SHACL validation has no shapes to remove, and the session start leaves it as it
 is.
 
-The institute's throwaway dataset `Tests` is such a dataset: the `jms_kapps` use cases run
-on it, and their seed loads their data into its default graph and UC2's shapes into its shapes
-registry. A run with `--repository Tests` clears the three graphs above and removes UC2's
-shapes, and it leaves every other named graph as it was. After such a run, seed `jms_kapps`
-again before a use case runs on `Tests`.
+The institute's shared throwaway dataset `Tests` is such a dataset: other projects run on it and
+keep their data and shapes in it. A run with `--repository Tests` clears the three graphs above
+and removes the shapes in its shapes registry, and it leaves every other named graph as it was.
+After such a run, other projects must seed their data and shapes again.
 
 `db` refuses any target it cannot tell is disposable. See `is_disposable_target` below for what
 disposable means and for the one environment variable that overrides it.
@@ -97,11 +96,11 @@ SHACL_PREFIX = "@prefix sh: <http://www.w3.org/ns/shacl#> .\n"
 # A resource possesses at most one workpiece: `test_commit_several_instances.py`. Its target is
 # that file's own class, so it cannot refuse a write of any other test.
 ONE_WORKPIECE_PER_RESOURCE = """
-    <https://example.org/several#ResourceShape> a sh:NodeShape ;
-        sh:targetClass <https://example.org/several#Resource> ;
-        sh:property <https://example.org/several#ResourceShape_hasPossessor> .
-    <https://example.org/several#ResourceShape_hasPossessor> a sh:PropertyShape ;
-        sh:path <https://example.org/several#hasPossessor> ;
+    <http://example.org/several#ResourceShape> a sh:NodeShape ;
+        sh:targetClass <http://example.org/several#Resource> ;
+        sh:property <http://example.org/several#ResourceShape_hasPossessor> .
+    <http://example.org/several#ResourceShape_hasPossessor> a sh:PropertyShape ;
+        sh:path <http://example.org/several#hasPossessor> ;
         sh:maxCount 1 .
 """
 
@@ -109,11 +108,11 @@ ONE_WORKPIECE_PER_RESOURCE = """
 # of the shape above replaces it. Its target is a class no other test writes, so it refuses
 # nothing else.
 STAND_IN_SHAPE = """
-    <https://example.org/other#ThingShape> a sh:NodeShape ;
-        sh:targetClass <https://example.org/other#Thing> ;
-        sh:property <https://example.org/other#ThingShape_label> .
-    <https://example.org/other#ThingShape_label> a sh:PropertyShape ;
-        sh:path <https://example.org/other#label> ;
+    <http://example.org/other#ThingShape> a sh:NodeShape ;
+        sh:targetClass <http://example.org/other#Thing> ;
+        sh:property <http://example.org/other#ThingShape_label> .
+    <http://example.org/other#ThingShape_label> a sh:PropertyShape ;
+        sh:path <http://example.org/other#label> ;
         sh:maxCount 1 .
 """
 

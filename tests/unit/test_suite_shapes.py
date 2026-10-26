@@ -31,11 +31,11 @@ from conftest import (
 RDF_TYPE = IRI("rdf:type")
 
 # The classes and the properties of the two shapes in `conftest`.
-SEVERAL = "https://example.org/several#"
+SEVERAL = "http://example.org/several#"
 RESOURCE = IRI(SEVERAL + "Resource")
 HAS_POSSESSOR = IRI(SEVERAL + "hasPossessor")
 
-OTHER = "https://example.org/other#"
+OTHER = "http://example.org/other#"
 THING = IRI(OTHER + "Thing")
 LABEL = IRI(OTHER + "label")
 

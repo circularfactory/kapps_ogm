@@ -25,7 +25,7 @@ class TestPropertySpecCardinality:
         """Test PropertySpec with minimum cardinality."""
         # Setup: Property with min_count = 2
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/multiProp"),
+            iri=IRI("http://example.org/multiProp"),
             value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=2,
@@ -44,7 +44,7 @@ class TestPropertySpecCardinality:
         """Test PropertySpec with maximum cardinality."""
         # Setup: Property with max_count = 1 (functional)
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/singleProp"),
+            iri=IRI("http://example.org/singleProp"),
             value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=None,
@@ -59,7 +59,7 @@ class TestPropertySpecCardinality:
         """Test PropertySpec with exact cardinality (min = max)."""
         # Setup: Exactly 3 values required
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/exactProp"),
+            iri=IRI("http://example.org/exactProp"),
             value_kind=PropertyValueKind.LITERAL,
             python_range_type=int,
             min_count=3,
@@ -75,7 +75,7 @@ class TestPropertySpecCardinality:
         """Test PropertySpec with unbounded cardinality (0..*)."""
         # Setup
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/manyProp"),
+            iri=IRI("http://example.org/manyProp"),
             value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=0,
@@ -95,7 +95,7 @@ class TestPropertySpecDatatypes:
         """Test literal property with string datatype."""
         # Setup
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/nameProp"),
+            iri=IRI("http://example.org/nameProp"),
             value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=None,
@@ -111,7 +111,7 @@ class TestPropertySpecDatatypes:
         """Test literal property with numeric datatypes."""
         # Setup: Integer property
         int_prop = PropertySpec(
-            iri=IRI("https://example.org/countProp"),
+            iri=IRI("http://example.org/countProp"),
             value_kind=PropertyValueKind.LITERAL,
             python_range_type=int,
             min_count=None,
@@ -126,12 +126,12 @@ class TestPropertySpecDatatypes:
         """Test object property pointing to another class."""
         # Setup: Object property with nested ClassSpec
         nested_class = Mock(spec=ClassSpec)
-        nested_class.iri = IRI("https://example.org/TargetClass")
+        nested_class.iri = IRI("http://example.org/TargetClass")
         nested_class.hydration_level = ClassHydrationLevel.FULL
         nested_class.to_pydantic_model = Mock(return_value=Mock)
 
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/refProp"),
+            iri=IRI("http://example.org/refProp"),
             value_kind=PropertyValueKind.OBJECT,
             python_range_type=None,
             min_count=None,
@@ -147,14 +147,14 @@ class TestPropertySpecDatatypes:
         """Test that literal property with IRI in allValuesFrom raises error."""
         # Setup: Literal property but allValuesFrom has IRI (invalid)
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/badProp"),
+            iri=IRI("http://example.org/badProp"),
             value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=None,
             max_count=None,
             nested=None,
         )
-        prop_spec.all_from = IRI("https://example.org/SomeClass")  # Invalid for literal
+        prop_spec.all_from = IRI("http://example.org/SomeClass")  # Invalid for literal
 
         # Execute & Assert
         with pytest.raises(ValueError, match="cannot have allValuesFrom as Object IRI"):
@@ -168,7 +168,7 @@ class TestPropertySpecConstraints:
         """Test PropertySpec with someValuesFrom constraint."""
         # Setup
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/someProp"),
+            iri=IRI("http://example.org/someProp"),
             value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=None,
@@ -184,7 +184,7 @@ class TestPropertySpecConstraints:
         """Test PropertySpec with allValuesFrom constraint."""
         # Setup
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/allProp"),
+            iri=IRI("http://example.org/allProp"),
             value_kind=PropertyValueKind.LITERAL,
             python_range_type=None,
             min_count=None,
@@ -203,7 +203,7 @@ class TestPropertySpecConstraints:
         """Test PropertySpec with both someValuesFrom and allValuesFrom."""
         # Setup
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/bothProp"),
+            iri=IRI("http://example.org/bothProp"),
             value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=None,
@@ -227,7 +227,7 @@ class TestPropertySpecification:
     def test_specify_literal_property_with_no_range_raises(self, ogm: OGM):
         """Test that literal property without rdfs:range raises error."""
         # setup
-        prop_iri = IRI("https://example.org/noRangeProp")
+        prop_iri = IRI("http://example.org/noRangeProp")
         ogm.db.triples_add(
             [
                 (prop_iri, IRI("rdf:type"), IRI("owl:DatatypeProperty")),
@@ -246,7 +246,7 @@ class TestPropertySpecification:
     def test_specify_literal_property_with_multiple_ranges_raises(self, ogm: OGM):
         """Test that literal property with multiple rdfs:range raises error."""
         # Setup: Multiple ranges
-        prop_iri = IRI("https://example.org/multiRangeProp")
+        prop_iri = IRI("http://example.org/multiRangeProp")
         ogm.db.triples_add(
             [
                 (prop_iri, IRI("rdf:type"), IRI("owl:DatatypeProperty")),
@@ -270,8 +270,8 @@ class TestPropertySpecification:
     def test_specify_class_property_creates_nested_class_spec(self, ogm: OGM):
         """Test that class property creates nested ClassSpec."""
         # Setup
-        prop_iri = IRI("https://example.org/objectProp")
-        target_class = IRI("https://example.org/TargetClass")
+        prop_iri = IRI("http://example.org/objectProp")
+        target_class = IRI("http://example.org/TargetClass")
         # The class is declared, because not every ruleset makes a range a class.
         ogm.db.triples_add(
             [
@@ -297,7 +297,7 @@ class TestPropertySpecification:
     def test_specify_class_property_with_no_range_raises(self, ogm: OGM):
         """Test that class property without rdfs:range raises error."""
         # Setup
-        prop_iri = IRI("https://example.org/noRangeProp")
+        prop_iri = IRI("http://example.org/noRangeProp")
         ogm.db.triples_add(
             [
                 (prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty")),
@@ -321,7 +321,7 @@ class TestPropertySpecSerialization:
         """Test to_string() returns readable representation."""
         # Setup
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/testProp"),
+            iri=IRI("http://example.org/testProp"),
             value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=1,
@@ -340,12 +340,12 @@ class TestPropertySpecSerialization:
         """Test to_string() includes nested ClassSpec info."""
         # Setup
         nested_class = Mock(spec=ClassSpec)
-        nested_class.iri = IRI("https://example.org/NestedClass")
+        nested_class.iri = IRI("http://example.org/NestedClass")
         nested_class.properties = {}
         nested_class.to_string = Mock(return_value="NestedClass(...)")
 
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/objProp"),
+            iri=IRI("http://example.org/objProp"),
             value_kind=PropertyValueKind.OBJECT,
             python_range_type=None,
             min_count=None,
@@ -369,7 +369,7 @@ class TestComplexPropertyHandling:
         nested_class = ClassSpec(iri=None, types=[], properties={})  # Anonymous class
 
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/complexProp"),
+            iri=IRI("http://example.org/complexProp"),
             value_kind=PropertyValueKind.COMPLEX,
             python_range_type=None,
             min_count=None,
@@ -389,7 +389,7 @@ class TestComplexPropertyHandling:
         nested_class.to_pydantic_model = Mock(return_value=Mock)
 
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/complexProp"),
+            iri=IRI("http://example.org/complexProp"),
             value_kind=PropertyValueKind.COMPLEX,
             python_range_type=None,
             min_count=None,
@@ -407,7 +407,7 @@ class TestComplexPropertyHandling:
         """Test that unknown value_kind raises ValueError."""
         # Setup: Invalid value_kind
         prop_spec = PropertySpec(
-            iri=IRI("https://example.org/badProp"),
+            iri=IRI("http://example.org/badProp"),
             value_kind="invalid_kind",  # Invalid
             python_range_type=None,
             min_count=None,
