@@ -2,10 +2,11 @@
 
 The anonymous node carries its RDF address (a Skolem IRI) out of band in a PrivateAttr,
 so that the address is reachable by the serializer but invisible in every projection.
-See PRD requirement R4 and RDF 1.1 Concepts section 3.5.
+See RDF 1.1 Concepts section 3.5.
 
 Important: the private attribute is a mirror, not the source of truth. It does not
-survive a dump-then-revalidate round trip. Node.data is the authoritative carrier.
+survive a dump-then-revalidate round trip. Node.data is the carrier of an anonymous node's
+address.
 """
 
 from __future__ import annotations

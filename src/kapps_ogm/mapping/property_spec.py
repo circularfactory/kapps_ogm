@@ -388,10 +388,10 @@ class PropertySpec:
         )
 
         # owl:Thing constrains nothing, and since the isIRI guard above confines the
-        # subsumption filter to named ranges it can no longer be filtered out by an
-        # anonymous sibling. Dropping it here is what stops an ancestor declaring
+        # subsumption filter to named ranges it cannot be filtered out by an
+        # anonymous sibling. Dropping it here stops an ancestor declaring
         # `rdfs:range owl:Thing` from being read as a named range mixed with an
-        # anonymous one. (Merge note: this line is bcb7840.)
+        # anonymous one.
         range_set -= {IRI("http://www.w3.org/2002/07/owl#Thing")}
 
         return range_set

@@ -43,12 +43,10 @@ PRIVATE_HOSTS: tuple[str, ...] = (
 )
 """The private hosts that must appear nowhere in a public tree.
 
-Index 0 is the private Git host -- where this library is developed, and the
-one the sibling repos already ban. Index 1 is the institute's GraphDB, and **it is the one that
-has actually fired here**: the conjunctive-range entry in `CHANGELOG.md` quoted the endpoint it
-was measured against, and all seven `scripts/demo_*.py` hardcode it as their `base_url`. That
-is not a credential, and it is behind KIT authentication, but an internal service address in a
-public changelog is a thing somebody notices later rather than never.
+Index 0 is the private forge, where this library is developed. Index 1 is the institute's
+GraphDB. That is not a credential, and it is behind KIT authentication, but an internal service
+address in a public changelog or in an example's `base_url` is a thing somebody notices later
+rather than never.
 
 `@kit.edu` in an author's e-mail address is deliberately *not* banned. The bare domain is
 public and the addresses are the credit this release is required to carry; only these two
@@ -61,14 +59,12 @@ DEAD_REFERENCE_DIRS: tuple[str, ...] = (
 )
 """Record directories that never ship, so a pointer at one is dead on arrival.
 
-Index 0 is the decision records, index 1 the requirements documents. **This repository has the
-second of them**, holding the specifications handed to it, and `CHANGELOG.md` cited a document
-inside it by full path three times, in entries that ship. No reader of the public tree can open
-any of them.
+Index 0 is the decision records, index 1 the requirements documents. This repository has the
+second of them, holding the specifications handed to it. No reader of the public tree can open
+a document in either.
 
-Neither directory is named literally here, for the reason at the top of this file: this module
-ships, check 5 scans it, and a plain literal in this docstring makes the checker report itself.
-It did, on the first run of `test_the_shipped_checker_passes_its_own_checks`.
+Neither directory is named literally here: this module ships, check 5 scans it, and a plain
+literal in this docstring makes the checker report itself.
 """
 
 CITATION: re.Pattern[str] = re.compile("ADR" + r"[-:\s]*" + "[0-9]{4}")

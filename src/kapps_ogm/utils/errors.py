@@ -148,7 +148,7 @@ class OGMNotFoundError(OGMError, ValueError):
 class OGMUsageError(OGMError, ValueError):
     """The API was called incorrectly. Action: Fix the call.
 
-    The OGM raises it where it raised a ``ValueError`` for a wrong call before: for example, two
+    The OGM raises it for a wrong call, as a ``ValueError``: for example, two
     changes of one ``commit`` that write one instance, or a ``ClassSpec`` without an IRI to
     hydrate. The consumer's developer fixes the call; the same call fails again.
     """
@@ -157,7 +157,7 @@ class OGMUsageError(OGMError, ValueError):
 class OGMUsageTypeError(OGMUsageError, TypeError):
     """The API was called with a wrong argument type or form. Action: Fix the call.
 
-    The OGM raises it where it raised a ``TypeError`` before: for example, ``commit()`` with
+    The OGM raises it for a wrong argument type, as a ``TypeError``: for example, ``commit()`` with
     neither or both of its two forms, or a change that is not a ``Create`` or an ``Update``. It is
     a ``TypeError`` and an ``OGMUsageError``, and so also a ``ValueError``.
     """

@@ -128,14 +128,14 @@ def test_a_fetch_sends_its_queries_as_text(ogm, store):
     assert_all_text(store)
 
 
-def test_an_authoritative_update_sends_its_queries_as_text(ogm, store):
+def test_an_exclusive_update_sends_its_queries_as_text(ogm, store):
     # The stored terms of the values that the declaration makes stale are read as well.
     ogm.commit(
         changes=[
             Update(
                 instance_iri=BELT_MQTT,
                 data={HAS_SPEED: [{HAS_VALUE: [1.5], HAS_UNIT: ["m/s"]}]},
-                interfaces=(Interface(HAS_SPEED, OPCUA, authoritative=True),),
+                interfaces=(Interface(HAS_SPEED, OPCUA, exclusive=True),),
             )
         ]
     )

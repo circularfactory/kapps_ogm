@@ -20,8 +20,8 @@ from conftest import is_disposable_target
         "http://localhost:7200",
         "http://127.0.0.1:7200",
         "http://[::1]:7200",
-        # The CI service alias, and the service name in kapps_semantic_middleware's compose
-        # file. A bare name resolves only inside the network that defines it.
+        # The CI service alias, and a service name in a compose file. A bare name resolves only
+        # inside the network that defines it.
         "http://graphdb:7200",
         "http://graphdb:7200/repositories/OGM",
     ],

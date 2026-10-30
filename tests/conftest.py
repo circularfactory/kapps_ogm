@@ -81,7 +81,7 @@ from kapps_ogm.ogm import OGM
 
 # The suite wipes graphs of the dataset it connects to, so the dataset is named on the command
 # line, by the person who runs the suite, and never taken from the environment, which may point
-# at anything -- the same hazard `kapps_semantic_middleware` pinned its own dataset for.
+# at anything -- the hazard that a dataset named by the environment may be a shared one.
 # The default is the dataset CI creates, so a run without the option runs where it always did.
 DEFAULT_REPOSITORY = "OGM"
 
@@ -143,8 +143,8 @@ REQUIRED_ENV = ("TRIPLESTORE_URL", "TRIPLESTORE_USERNAME", "TRIPLESTORE_PASSWORD
 # Disposable means one of exactly two things:
 #
 # - **The host is loopback, or a bare hostname carrying no dot.** A bare name is a container
-#   alias -- `graphdb`, which is this project's CI service alias and the service name in
-#   `kapps_semantic_middleware`'s compose file -- and it resolves only inside the network that
+#   alias -- `graphdb`, which is this project's CI service alias and a service name in
+#   a compose file -- and it resolves only inside the network that
 #   defines it. A store that other people share is always reached by a dotted name. The rule
 #   needs no allowlist and no per-dataset upkeep.
 #
@@ -152,13 +152,13 @@ REQUIRED_ENV = ("TRIPLESTORE_URL", "TRIPLESTORE_USERNAME", "TRIPLESTORE_PASSWORD
 #   not written here: `tests/` ships, and check 4 in `scripts/release_checks.py` rejects a
 #   private host anywhere in the public tree. The tests use `example.org` for the same reason.
 # - **`TRIPLESTORE_ALLOW_DESTRUCTIVE=1` is set**, which is a person saying so in as many words.
-#   The opt-in's old name, from before the suite moved to `TRIPLESTORE_*`, no longer counts.
+#   Only that exact variable, set to `1`, counts.
 #
 # The opt-in is deliberately not named after any of the three variables on group
 # `circular_factory` (the shared store's user and password, and a GitHub token). A
 # protected group variable outranks one declared in `.gitlab-ci.yml` and arrives only on
-# protected refs, which is exactly how a job passes every merge request and then fails the
-# moment it merges.
+# protected refs, which is exactly how a job passes on every feature branch and then fails the
+# moment it runs on the default branch.
 ALLOW_DESTRUCTIVE_ENV = "TRIPLESTORE_ALLOW_DESTRUCTIVE"
 
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
@@ -271,8 +271,7 @@ def db(repository: str) -> TripleStore:
 def ogm(db: TripleStore) -> OGM:
     """An OGM instance backed by the **live** store.
 
-    The mocked counterpart is `ogm_with_mock_db` in `tests/unit/conftest.py`. This docstring
-    used to say "with a mocked database", which is what this one is not.
+    The mocked counterpart is `ogm_with_mock_db` in `tests/unit/conftest.py`.
     """
     ogm = OGM(db=db)
     return ogm

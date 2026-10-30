@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.0 — 2026-10-30
+
+- **kapps_ogm requires kapps-triplestore-interface 2.3.0 or later within 2.3**
+  (`kapps-triplestore-interface~=2.3.0`). It is the release this version is tested against.
+
+- **The `authoritative` keyword of `Interface` is `exclusive`, a change of the public interface
+  without an alias.** `Interface(property_iri, interface_iri, exclusive=True)` makes the
+  declarations of a parameter property select its shape alone, and a commit removes the stored
+  values of the properties that only one of the other interfaces of the stored node restricts,
+  as `authoritative=True` did. `Interface(..., authoritative=True)` raises the `TypeError` of an
+  unknown keyword, so a caller that passes it changes the keyword. `InterfaceResolution` holds
+  its set of such properties in the field `exclusive`, and the usage error for declarations that
+  disagree on the flag names `exclusive`. The glossary calls the declaration an exclusive
+  declaration. Otherwise behaviour is unchanged.
+
+  Every name marked interim in an earlier entry is final.
+
+- **The released tree's comments and docstrings describe their own code, and name no tracker
+  entry and no person outside the credits.** No shipped comment or docstring cites a decision
+  record, the date of a decision or another package as the reference for its own behaviour; the
+  glossary no longer carries the history of a rewording; the changelog's released entries no
+  longer refer to a tracker entry; a person's name stands only in the licence, the manifest and
+  the documentation site's author line. A release-tier test scans the tree that a dry run stages
+  for a handle with a number, for a sentence about a tracker entry, and for the names of every
+  author of the history. The released entries no longer point at requirement documents or
+  scripts that do not ship, and no shipped comment or docstring tells what the code used to do.
+  Behaviour and the public interface are unchanged.
+
 ## 0.3.3 — 2026-10-26
 
 - **kapps_ogm requires kapps-triplestore-interface 2.2.3 or later within 2.2**
@@ -346,7 +374,7 @@ code runs against. The dependency table below is the honest one:
 
 The two are not continuous in build terms either. 0.1.2 was built with poetry-core,
 which writes only the first `authors` entry into a wheel's metadata and so credited one of this
-library's two authors. This release builds with hatchling, and `prepare_release.py` asserts both
+library's two authors. This release builds with hatchling, and the release preparation asserts both
 names against the built artifact rather than against the manifest that claims them.
 
 No git history is carried. This repository takes one commit per release, so the credit that
@@ -359,10 +387,7 @@ true — this is usable, several projects run against it, and the API may still 
 
 ### Added
 
-- **Four new modules implement Skolemised identity for anonymous nodes, per PRD
-  requirements R1–R6.** The requirements document is
-  `kapps_semantic_middleware`'s anonymous-node-identity PRD, which is development-repository
-  material and does not ship with this distribution; this entry is the record that ships.
+- **Four new modules implement Skolemised identity for anonymous nodes.**
   `kapps_ogm/utils/skolem.py` provides `mint_skolem_iri()` and `is_skolem_iri()`, plus
   `WELL_KNOWN_GENID_PATH` and `DEFAULT_SKOLEM_NAMESPACE`. The path begins
   `/.well-known/genid/` per RDF 1.1 Concepts §3.5's recognisability provision, so a third
@@ -385,7 +410,7 @@ true — this is usable, several projects run against it, and the API may still 
 
 - **`PropertySpec.specify()` now merges anonymous `rdfs:range` restrictions across the `rdfs:subPropertyOf*` chain, implementing the conjunctive semantics RDFS entails.** Two defects, which RDFS makes one problem: ranges asserted on an interface superproperty were invisible to the OGM, and multiple `rdfs:range` assertions on one property raised `ValueError: Property ... has multiple independent rdfs:range defined`. RDFS ranges are conjunctive — several assertions mean the value must satisfy all of them, their intersection — so refusing them was an incorrect reading of the specification, not a deliberate restriction. The merge is an entailment, not a convention: `belt tu:hasConveyorSpeed _:b` (asserted), `tu:hasConveyorSpeed rdfs:subPropertyOf inf:isInterfaceAccessibleMQTTParameter` (asserted) entails `belt inf:isInterfaceAccessibleMQTTParameter _:b` (rdfs7); `inf:isInterfaceAccessibleMQTTParameter rdfs:range C_mqtt` entails `_:b rdf:type C_mqtt` (rdfs3); `tu:hasConveyorSpeed rdfs:range C_speed` entails `_:b rdf:type C_speed` (rdfs3); therefore `_:b rdf:type (C_speed ⊓ C_mqtt)`. The value node **is** an instance of the intersection, and the OGM computing it implements an entailment the reasoner does not materialise. Measured: GraphDB materialises **0** inherited ranges even with `include_implicit=True`, so range-on-superproperty could not work by inheritance and had to be resolved explicitly by walking `rdfs:subPropertyOf*` in SPARQL.
 
-  The cost to scenario 3 was observable on every `fetch(materialize=True)` of a parameter node: `WARNING kapps_node_validator: Unknown properties in data for ClassSpec None: {hasMQTTBrokerIP, hasMQTTTopic, hasMQTTSetTopic, accessMode}`. Four of the five triples on the node were invisible to the effective shape. `inf:accessMode` was worse than undeclared: it is declared on the interface superproperty `inf:isInterfaceAccessibleParameter`, two levels up the chain, so it was **unreachable** until the walk was added. This also forced a documented exception to the rule that values are written through the mapper: `examples/seed.py:_attach_connection_metadata` in `EHoffm/kapps_semantic_middleware` wrote topic, set topic and broker with a raw SPARQL `INSERT`, flagged in its own docstring as that exception, because the write path serialised only what the range restriction declared. Verified live against the institute's GraphDB, repository `Tests`, on 2026-07-28: `tu:hasConveyorSpeed` now resolves one COMPLEX spec whose nested anonymous `ClassSpec` declares all six of `inf:hasValue` (float), `tu:hasUnit`, `inf:hasMQTTTopic`, `inf:hasMQTTBrokerIP`, `inf:hasMQTTSetTopic` and `inf:accessMode` (all string); a scoped `fetch(materialize=True)` of `tui:ConveyorBelt1_left` returns the topic, set topic, broker IP and access mode in the parameter node's data and logs no validator warning.
+  The cost to scenario 3 was observable on every `fetch(materialize=True)` of a parameter node: `WARNING kapps_node_validator: Unknown properties in data for ClassSpec None: {hasMQTTBrokerIP, hasMQTTTopic, hasMQTTSetTopic, accessMode}`. Four of the five triples on the node were invisible to the effective shape. `inf:accessMode` was worse than undeclared: it is declared on the interface superproperty `inf:isInterfaceAccessibleParameter`, two levels up the chain, so it was **unreachable** until the walk was added. This also forced a documented exception to the rule that values are written through the mapper: the seed example of `kapps_semantic_middleware` wrote topic, set topic and broker with a raw SPARQL `INSERT`, flagged in its own docstring as that exception, because the write path serialised only what the range restriction declared. Verified live against the institute's GraphDB, repository `Tests`, on 2026-07-28: `tu:hasConveyorSpeed` now resolves one COMPLEX spec whose nested anonymous `ClassSpec` declares all six of `inf:hasValue` (float), `tu:hasUnit`, `inf:hasMQTTTopic`, `inf:hasMQTTBrokerIP`, `inf:hasMQTTSetTopic` and `inf:accessMode` (all string); a scoped `fetch(materialize=True)` of `tui:ConveyorBelt1_left` returns the topic, set topic, broker IP and access mode in the parameter node's data and logs no validator warning.
 
   Because ranges can now arrive from multiple levels of the chain, conflict rules are defined where previously the code simply refused the case:
 
@@ -398,9 +423,9 @@ true — this is usable, several projects run against it, and the API may still 
   | Two unrelated named class ranges | Raise, as before |
   | A datatype target merged with a class target | Raise — the value cannot be both (added with the `value_kind` fix in the next entry) |
 
-  The subsumption filter (commit `3a86137`) is narrowed to named ranges: it now carries an `isIRI(?sub) && isIRI(?obj)` guard. It exists to pick the most specific *named* class; without the guard it could discard an anonymous restriction range and silently drop half a merge. A cross-product defect is fixed in passing: when a property's `rdfs:range` was a bare `owl:Restriction` rather than an `owl:Class` with `owl:intersectionOf`, both structural `OPTIONAL`s in `_specify_complex_property`'s query failed, `?restriction` stayed unbound, and the following `OPTIONAL { ?restriction owl:onProperty ?onProperty }` matched **every restriction in the repository**. Binding `?restriction` in a `UNION` before the detail `OPTIONAL`s removes it. Walking the chain made fixing it necessary, since it multiplies the number of ranges reaching that query. The structural metadata (`unionOf`, `complementOf`, `oneOf`) moved to its own query for the same reason: reading it off "the first binding" is meaningless once several ranges contribute. The walk uses the SPARQL property path `rdfs:subPropertyOf*`, evaluated as a transitive closure, so a cyclic `rdfs:subPropertyOf` assertion terminates by construction rather than needing a guard in Python.
+  The subsumption filter is narrowed to named ranges: it now carries an `isIRI(?sub) && isIRI(?obj)` guard. It exists to pick the most specific *named* class; without the guard it could discard an anonymous restriction range and silently drop half a merge. A cross-product defect is fixed in passing: when a property's `rdfs:range` was a bare `owl:Restriction` rather than an `owl:Class` with `owl:intersectionOf`, both structural `OPTIONAL`s in `_specify_complex_property`'s query failed, `?restriction` stayed unbound, and the following `OPTIONAL { ?restriction owl:onProperty ?onProperty }` matched **every restriction in the repository**. Binding `?restriction` in a `UNION` before the detail `OPTIONAL`s removes it. Walking the chain made fixing it necessary, since it multiplies the number of ranges reaching that query. The structural metadata (`unionOf`, `complementOf`, `oneOf`) moved to its own query for the same reason: reading it off "the first binding" is meaningless once several ranges contribute. The walk uses the SPARQL property path `rdfs:subPropertyOf*`, evaluated as a transitive closure, so a cyclic `rdfs:subPropertyOf` assertion terminates by construction rather than needing a guard in Python.
 
-  Requiredness is deliberately untouched: `owl:someValuesFrom` still sets `min_count = 1`. That it must not, under the Open World Assumption, is open work. The merge as implemented cannot make a shape harder to satisfy than its most restrictive part, which is the constraint that open work places on this change. The specification of record is requirement **R7** of `kapps_semantic_middleware`'s anonymous-node-identity PRD, and the reading of `rdfs:range` that it builds on is recorded there too. Both are development-repository documents and neither ships here. This unblocks two further fixes that could not land while every fetch of real data carried undeclared properties.
+  Requiredness is deliberately untouched: `owl:someValuesFrom` still sets `min_count = 1`. That it must not, under the Open World Assumption, is open work. The merge as implemented cannot make a shape harder to satisfy than its most restrictive part, which is the constraint that open work places on this change. This unblocks two further fixes that could not land while every fetch of real data carried undeclared properties.
 
 - **A nested property's `value_kind` was inferred from the *presence* of `owl:someValuesFrom` / `owl:allValuesFrom` rather than from what the keyword points at, so every restriction was assumed to constrain a literal.** `owl:allValuesFrom xsd:string` constrains a literal; `owl:allValuesFrom cfc:Unit` constrains an object, and both are legal OWL. `XSDToPythonTypes` is a plain `dict` and both lookups used `[]`, so a class target raised `KeyError` carrying nothing but the IRI — a poor diagnostic for a domain engineer who wrote a legal restriction. The intended fallback was **dead code**: the `someValuesFrom` branch already read `if range_type: ... else: nested_spec.some_from = range_iri`, which says exactly the right thing, but the `[]` lookup on the line above raised first so the `else` could never run; the intent was `.get()`. The codebase contradicted itself — `to_pydantic_field`'s LITERAL branch already raised `"Literal property ... cannot have allValuesFrom as Object IRI"`, so one site assumed class targets impossible while another explicitly rejected them.
 
@@ -427,7 +452,7 @@ true — this is usable, several projects run against it, and the API may still 
   whole old group and inserted a new one. Because `kapps_triplestore_interface.triples_update`
   renders blank nodes as SPARQL variables, the DELETE matched the real node by structure,
   unlinking it and orphaning every triple the ClassSpec did not declare. A no-change commit
-  was not a no-op. This was reproduced live on the ticket: after committing a speed value,
+  was not a no-op. This was reproduced live: after committing a speed value,
   the parameter node had moved, and three MQTT connection-metadata triples were left on a
   node with no inbound edge — while the call reported success.
 
@@ -469,9 +494,9 @@ true — this is usable, several projects run against it, and the API may still 
   them — so a legacy node loses them exactly once. This is bounded in practice because only
   the TBox is seeded in productive environments; all ABox data is written through the OGM
   and is therefore skolemised from the outset. Converting a whole resource up front, and the
-  inverse deskolemise, are PRD R12 and not built here. Merging the interface restrictions so
+  inverse deskolemise, are not built here. Merging the interface restrictions so
   that connection metadata becomes declared — which is what stops even that one-time loss — is
-  PRD R7, the range merge above. Entity deletion stays unsupported; canonical (isomorphism-preserving)
+  the range merge above. Entity deletion stays unsupported; canonical (isomorphism-preserving)
   Skolemisation is explicitly not what was built, since identity here is per node, not
   derived from content, which is what a locator needs.
 
@@ -480,11 +505,11 @@ true — this is usable, several projects run against it, and the API may still 
   `test_anonymous_node_model.py` (projection invariance), `test_anonymous_node_addressing.py`
   (`to_triples` address resolution), `test_anonymous_node_round_trip.py` (identity at read,
   reconciliation, `Node.diff`), and `test_commit_round_trip.py`, which drives the full
-  `fetch` → `model_dump` → edit → `commit` pattern and asserts the ticket's acceptance
+  `fetch` → `model_dump` → edit → `commit` pattern and asserts the acceptance
   criteria directly: an unchanged commit writes zero triples, a changed value emits exactly
   one DELETE and one INSERT naming the node's IRI, the belt→parameter link is never
   unlinked, and no blank node reaches the write path. The suite is 155 tests, all passing.
-  The ticket noted that this was never caught because `scripts/demo_update_value.py`
+  This was never caught because the update demo
   exercises only the named-class `OBJECT` path — `demo:hasConveyorPosition` has a named-class
   range, so `_value_to_triples` took the stable-IRI branch. The `COMPLEX` update path now
   has coverage.
@@ -499,7 +524,7 @@ true — this is usable, several projects run against it, and the API may still 
 
   `to_json_ld` decided what to inline by testing `startswith("genid-")`, the blank-node label
   form, so a skolemised parameter stopped being inlined and its address surfaced in a northbound
-  projection — a leak R4 forbids, and a change to the served shape. All five inlining decisions
+  projection — a leak that must not happen, and a change to the served shape. All five inlining decisions
   now route through one `is_anonymous_ref` predicate that treats a Skolem IRI as what §3.5 says
   it is: a blank node's stand-in.
 
@@ -515,10 +540,10 @@ true — this is usable, several projects run against it, and the API may still 
   pattern, two sibling parameter nodes carry a unit and metadata but no value, so they
   are frequently content-identical and ties are the normal case rather than the edge case.
 
-  On the namespace: Ratan settled the minting authority as `w3id.org/circularfactory`, which is
+  On the namespace: the minting authority is `w3id.org/circularfactory`, which is
   what `DEFAULT_SKOLEM_NAMESPACE` already uses, so requiring the well-known path constrains
-  nothing that was wanted. Had `urn:uuid:` been chosen instead — one of the three candidates the
-  PRD left open — it would have been rejected here, and under the unvalidated code it would
+  nothing that was wanted. Had `urn:uuid:` been chosen instead — one of the three candidates
+  that were open — it would have been rejected here, and under the unvalidated code it would
   instead have silently disarmed the `fetch` guard.
 
   `kapps_ogm/utils/__init__.py` now re-exports the new errors and Skolem helpers, matching how
@@ -553,7 +578,7 @@ true — this is usable, several projects run against it, and the API may still 
   `deepdiff` remains a declared dev dependency — `tests/unit/test_class_scope.py`
   still uses it.
 
-- **`scripts/demo_instantiation.py`, for the same reason, and because it was the
+- **The end-to-end demo script, for the same reason, and because it was the
   last consumer of undeclared packages.** It was the repository's most complete
   worked example — the only one going all the way from an ontology class to a served
   REST API: `ClassScope.from_property_chains` → `ClassSpec.specify` →
@@ -562,8 +587,7 @@ true — this is usable, several projects run against it, and the API may still 
   `aas.DataModel.from_models` → `generate_rest_api_for_data_model` → `uvicorn.run`.
 
   Only that last stretch needed `aas_middleware` and `uvicorn`, and neither is
-  declared in `pyproject.toml`; `aas_middleware` was deliberately dropped in 279851e
-  ("This will break demos"). Once the manifest was fixed (under *Fixed* below), this script was the only thing in
+  declared in `pyproject.toml`; `aas_middleware` was deliberately dropped from the manifest. Once the manifest was fixed (under *Fixed* below), this script was the only thing in
   the repository that still could not be run from a clean environment built from the
   manifest — **with it gone, every remaining script and test can.** It also encoded
   the previous middleware's call pattern and carried a hardcoded GraphDB hostname.
@@ -573,8 +597,7 @@ true — this is usable, several projects run against it, and the API may still 
   that half cannot live in this repository, since the middleware already depends on
   `kapps_ogm` and a demo here driving it would close a dependency cycle. The OGM-only
   portion is blocked on nothing; the end-to-end portion belongs to
-  `kapps_semantic_middleware`. The four generated artefacts under
-  `scripts/output/` are retained for reference and are now stale and unreferenced.
+  `kapps_semantic_middleware`.
 
 ### Fixed
 
@@ -583,12 +606,12 @@ true — this is usable, several projects run against it, and the API may still 
   missing import at module scope is a pytest *collection* error rather than a test
   failure, either one alone aborted the entire run — including the 80-odd tests that
   never touch the missing package. No environment built from the manifest could run
-  the suite at all, which blocked verifying any other ticket. Two distinct defects,
+  the suite at all, which blocked verifying anything else. Two distinct defects,
   the first masking the second:
 
   1. **`deepdiff` was imported but never declared** (`pyproject.toml`). Used by
      `tests/unit/test_class_scope.py` (`from deepdiff import DeepDiff`),
-     `tests/integration/test_roundtrip.py` and `scripts/demo_roundtrip.py` (both
+     `tests/integration/test_roundtrip.py` and a demo script (both
      `import deepdiff`), but absent from both `[tool.poetry.dependencies]` and
      `[tool.poetry.group.dev.dependencies]`, which listed only `black`, `pytest` and
      `pylint`. Declared `deepdiff = "^9.1.0"` in the dev dependency group.
@@ -598,7 +621,7 @@ true — this is usable, several projects run against it, and the API may still 
      so this had exactly the same suite-wide blast radius as (1) — it was simply
      masked by it. The import served only a session-scoped `mw` fixture returning a
      bare `AasMiddleware()`, which no test in the repository requests: dead code left
-     behind when commit 279851e dropped `aas_middleware` from the manifest. Removed
+     behind when `aas_middleware` was dropped from the manifest. Removed
      the unused fixture and its import, rather than re-adding a dependency that had
      been intentionally removed.
 
@@ -612,11 +635,6 @@ true — this is usable, several projects run against it, and the API may still 
   property present in the data. It aborts inside `ogm.create`, well before any
   `DeepDiff` call.
 
-  Note for follow-up: `scripts/demo_instantiation.py` still does `import
-  aas_middleware`, and is now the only consumer of an undeclared package left in the
-  repository. That is the breakage commit 279851e knowingly accepted ("This will
-  break demos"), and `scripts/` is outside this fix's scope, but it means the demos
-  are still not runnable from the manifest alone. Fixed here: the script is removed, see *Removed* above.
 
 - **`OGM.commit` could not add or remove properties — only replace equal counts,
   and crashed on any `xsd:dateTime` property.** Three related defects, all on the
@@ -664,7 +682,7 @@ true — this is usable, several projects run against it, and the API may still 
   `ClassHydrationLevel.REFERENCE` (or an empty scope), which skips property
   resolution, avoided the crash.
 
-  **Root cause:** commit `bcb7840` ("Fix handling of owl:Thing range in
+  **Root cause:** a commit ("Fix handling of owl:Thing range in
   propertySpec") refactored the range lookup so the query result is bound to the
   local variable `query_result`, but the immediately following set-comprehension was
   left referencing the old, now-undefined name `range_query_result`:

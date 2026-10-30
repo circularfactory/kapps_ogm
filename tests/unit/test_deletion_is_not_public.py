@@ -1,4 +1,4 @@
-"""Deletion is a stated decision: ``_delete`` raises and says why. The public ``delete`` is a
+"""Deletion is not offered: ``_delete`` raises and says why. The public ``delete`` is a
 deprecated alias for one release: it warns and raises the same error."""
 
 from unittest.mock import Mock
@@ -12,7 +12,7 @@ DECISION = (
     "the entry point is kept for a later extension."
 )
 
-# The public methods of the OGM. A new public name is a decision, so it is listed here.
+# The public methods of the OGM. A new public name has to be added to this list.
 PUBLIC_API = {
     "commit",
     "create",

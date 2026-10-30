@@ -340,7 +340,7 @@ ogm.commit(changes=[Update(instance_iri=belt, data=edited, merge_depth=1)])
 
 # A protocol migration: the OPC UA shape alone, and the stale MQTT values are removed.
 ogm.commit(changes=[Update(instance_iri=belt, data=migrated,
-                           interfaces=[Interface(HAS_SPEED, OPCUA_PARAMETER, authoritative=True)])])
+                           interfaces=[Interface(HAS_SPEED, OPCUA_PARAMETER, exclusive=True)])])
 ```
 
 `merge_depth` counts the levels of the interface hierarchy from its most general property, which
@@ -357,7 +357,7 @@ gives that domain property's range to the node as well.
 ## Contributing
 
 This repository is a **publish target**. It receives one commit per release, cut from a private
-development repository, so a pull request opened here has no shared history to merge into and
+development repository, so a change proposed here has no shared history to merge into and
 cannot be merged. Please open an issue instead.
 
 # License

@@ -240,7 +240,7 @@ class TestAnAnonymousNode:
         }
 
     def test_two_appends_of_equal_content_are_two_nodes(self, ogm, store):
-        """An anonymous node has no identity of its own (kapps_ogm 4)."""
+        """An anonymous node has no identity of its own."""
         ogm.commit(
             changes=[
                 Append(B2, HAS_COMPLEX_ATTRIBUTE, self.VALUE),

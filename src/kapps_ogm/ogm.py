@@ -81,8 +81,9 @@ class Update:
             does not name keeps its stored values.
         interfaces: Interfaces declared for the parameter properties of the instance. They
             merge with the interfaces that the stored nodes give as evidence. For a property
-            whose declarations are authoritative, the evidence is ignored, and the stored
-            values of a property that only an evidenced interface restricts are removed.
+            whose declarations are exclusive, the other interfaces of the stored node are
+            ignored, and the stored values of a property that only one of them restricts are
+            removed.
         merge_depth: The merge depth of the shape the data is compared with, as for
             OGM.fetch. A property below the depth is not in the shape, so its stored values
             stay as they are: data fetched at a depth goes back at the same depth.
@@ -221,16 +222,17 @@ def _carrier_iri(
 def _without_stale(
     declared: ClassSpec, fetched: ClassSpec, resolution: InterfaceResolution
 ) -> ClassSpec:
-    """``fetched``, the shape a write's fetch resolved, with each authoritatively declared
-    parameter property back in its declared shape: an authoritative declaration takes no
-    evidence, so the fetch widened it only by the properties the declaration makes stale."""
+    """``fetched``, the shape a write's fetch resolved, with each exclusively declared
+    parameter property back in its declared shape: an exclusive declaration ignores the other
+    interfaces of the stored node, so the fetch widened it only by the properties the
+    declaration makes stale."""
     replaced: dict[IRI, PropertySpec] = {}
     for prop, prop_spec in fetched.properties.items():
         declared_spec = declared.properties.get(prop)
         if declared_spec is None or prop_spec is declared_spec:
             continue
         if prop_spec.value_kind is PropertyValueKind.COMPLEX:
-            if prop in resolution.authoritative:
+            if prop in resolution.exclusive:
                 replaced[prop] = declared_spec
         elif (
             prop_spec.value_kind is PropertyValueKind.OBJECT
@@ -351,7 +353,7 @@ class OGM:
 
         Raises:
             OGMUsageError: If ``interfaces`` holds an entry that is not an ``Interface``, if
-                the declarations of one property disagree on ``authoritative``, or if
+                the declarations of one property disagree on ``exclusive``, or if
                 ``merge_depth`` is negative. Fix the call.
         """
         resolution = InterfaceResolution.of(interfaces, merge_depth)
@@ -406,9 +408,10 @@ class OGM:
 
         A parameter node is evidence for each interface whose range restricts a property the
         node carries and the shape does not declare. A property whose declarations are
-        authoritative takes no evidence. With ``stale_triples``, which a write passes, its shape
-        takes the properties that the declaration makes stale instead, and ``stale_triples``
-        collects their stored values, so that the values a write removes are read by the fetch.
+        exclusive ignores the other interfaces of the stored node. With ``stale_triples``, which
+        a write passes, its shape takes the properties that the declaration makes stale instead,
+        and ``stale_triples`` collects their stored values, so that the values a write removes
+        are read by the fetch.
         ``spec`` is not changed: a changed position is a copy, and so is each ClassSpec above
         it. The nodes at one position share one shape, the union of their interfaces, because
         one field of a model has one type."""
@@ -418,7 +421,7 @@ class OGM:
             if not values or prop_spec.nested is None:
                 continue
             if prop_spec.value_kind is PropertyValueKind.COMPLEX:
-                if prop in resolution.authoritative:
+                if prop in resolution.exclusive:
                     if stale_triples is not None:
                         widened = self._with_stale(
                             spec, prop, values, resolution, stale_triples
@@ -460,7 +463,7 @@ class OGM:
         resolution: InterfaceResolution,
         stored: dict,
     ) -> PropertySpec:
-        """The PropertySpec of ``prop`` in ``spec``, an authoritatively declared parameter
+        """The PropertySpec of ``prop`` in ``spec``, an exclusively declared parameter
         property, widened by the properties that its declaration makes stale.
 
         A property is stale when an interface that ``nodes``, its stored values, give as
@@ -777,9 +780,9 @@ class OGM:
 
         Each returned group carries an ``"id"`` entry holding the node's own identifier — an IRI
         once the node has been skolemised, a BNode while it is still in the store's blank-node
-        form. Discarding it, as this used to, is where identity died: the write path then had no
-        way to address the node it had just read, so it minted a replacement and orphaned every
-        triple this query returned but the ClassSpec does not declare.
+        form. It must be kept: without it the write path has no way to address the node it just
+        read, so it would mint a replacement and orphan every triple this query returned but the
+        ClassSpec does not declare.
 
         Groups come back ordered by identifier so that two fetches of unchanged data align
         positionally, which is what ``reconcile_anonymous_addresses`` relies on.
@@ -884,8 +887,8 @@ class OGM:
             materialize: If True, materialize the Node's data according to the ClassSpec.
                 Ignored if as_reference is True.
             interfaces: Interfaces declared for parameter properties, as for
-                ``get_class_spec``. An authoritative declaration ignores the evidence of its
-                property.
+                ``get_class_spec``. An exclusive declaration ignores the other interfaces of
+                the stored node.
             merge_depth: How many levels of each interface hierarchy to merge, as for
                 ``get_class_spec``. ``None``, the default, merges every level.
             _evidence: The interface resolution under which a given ``class_spec`` takes
@@ -1307,7 +1310,7 @@ class OGM:
             _evidence=resolution,
         )
         declared_spec = class_spec
-        # The fetched shape holds the properties that an authoritative declaration makes stale;
+        # The fetched shape holds the properties that an exclusive declaration makes stale;
         # the data is materialized without them, so the diff removes their stored values and a
         # value of one in the data is refused.
         class_spec = _without_stale(
@@ -1331,8 +1334,7 @@ class OGM:
             triple for triple in removed if (triple[0], IRI(triple[1])) not in skipped
         }.union(*old_node._stale.values())
 
-        # An earlier version logged the full turtle at INFO. The richer content is kept,
-        # but moved to DEBUG and guarded, because a library that dumps every
+        # The full turtle is logged at DEBUG, and guarded, because a library that dumps every
         # triple on every commit is unusable for a consumer that commits per
         # operation-status change — and the f-string would render the turtle even
         # when the level suppresses it.
@@ -1430,7 +1432,7 @@ class OGM:
         node: Node,
     ) -> None:
         """
-        Deletion is not part of the mapper's public interface, by decision.
+        Deletion is not part of the mapper's public interface.
 
         An individual is never deleted: other data may still refer to it, and a mapper that
         removed it would leave those references dangling. A property is retracted with ``commit``, which removes

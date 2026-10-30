@@ -39,7 +39,7 @@ def reconcile_anonymous_addresses(*, old: "Node", new: "Node") -> None:
     under the locator pattern two sibling parameter nodes are often content-identical.
 
     Args:
-        old: The node as fetched from the store, carrying the authoritative addresses.
+        old: The node as fetched from the store, carrying the stored addresses.
         new: The node about to be written. Mutated in place.
 
     Raises:

@@ -5,7 +5,7 @@ AND undeclared ones the range restriction does not mention (MQTT topic, broker I
 commit must leave that node where it is, so the undeclared triples are never orphaned.
 
 Three seams:
-    1. ``OGM._fetch_complex_property`` — identity survives the read (PRD R1).
+    1. ``OGM._fetch_complex_property`` — identity survives the read.
     2. ``reconcile_anonymous_addresses`` — addresses transfer from the fetched node to the
        outgoing one, which is what makes a round trip through ``model_dump()`` work.
     3. ``Node.diff`` — no change is a no-op; a changed value diffs per triple, naming the IRI.
@@ -157,7 +157,8 @@ class TestIdentityAtRead:
         assert ogm_with_mock_db._fetch_complex_property(BELT_IRI, HAS_SPEED) == []
 
     def test_the_identifier_reaches_the_nested_node(self, ogm_with_mock_db, mock_db):
-        """End to end: the address must land on Node.data, the authoritative carrier."""
+        """End to end: the address must land on Node.data, the carrier of an anonymous node's
+        address."""
         mock_db.query.return_value = query_result({SKOLEM_IRI: {HAS_UNIT: ["m/s"]}})
         fetched = ogm_with_mock_db._fetch_complex_property(BELT_IRI, HAS_SPEED)
 
@@ -250,8 +251,8 @@ class TestAddressReconciliation:
         """Alignment is positional, so a shortened list would silently misassign addresses.
 
         Shifting the second node's address onto the first does not merely lose an address — it
-        moves one parameter's properties onto another parameter's node. That is worse than the
-        failure R3 forbids, so it fails loudly instead.
+        moves one parameter's properties onto another parameter's node. That is worse than
+        losing an address, so it fails loudly instead.
         """
         old = Node(
             id=BELT_IRI,

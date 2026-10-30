@@ -73,9 +73,9 @@ def to_triples(self: "Node", *, links_from_data: bool = False) -> set[Triple]:
         # Always treat as list
         values = value if isinstance(value, list) else [value]
 
-        # Node.data is the authoritative carrier of an anonymous node's address. Its entries are
-        # positionally aligned with the materialized instance's, because format_for_instance
-        # builds the payload by walking the same lists in the same order.
+        # Node.data is the carrier of an anonymous node's address. Its entries are positionally
+        # aligned with the materialized instance's, because format_for_instance builds the
+        # payload by walking the same lists in the same order.
         data_values = (self.data or {}).get(prop_iri) or []
 
         for index, v in enumerate(values):
@@ -128,7 +128,7 @@ def to_json_ld(
 
         A Skolem IRI *is* a blank node's stand-in (RDF 1.1 Concepts §3.5), so it inlines exactly
         as the blank node it replaced did. Keeping it inline also keeps the address out of this
-        projection, which R4 requires of everything served northbound.
+        projection.
         """
         return ref.startswith("genid-") or WELL_KNOWN_GENID_PATH in ref
 
@@ -273,7 +273,8 @@ def _resolve_anonymous_address(
     range restriction does not declare — attached to the node that carries them.
 
     Resolution order:
-        1. ``Node.data`` — the authoritative carrier, populated at fetch and by ``_assign_id``.
+        1. ``Node.data`` — the carrier of an anonymous node's address, populated at fetch and by
+           ``_assign_id``.
         2. the ``_node_iri`` mirror on an ``AnonymousNodeModel``, for a node not reachable through
            ``Node.data`` (a doubly-nested anonymous node serializes from its instance alone).
         3. raise.
@@ -404,7 +405,8 @@ def _value_to_triples(
             instance=value,
             class_spec=class_spec,  # Properties encoded in Pydantic model
             # Carry the recorded data down so anonymous nodes nested below this one can resolve
-            # their own addresses from the authoritative carrier rather than the model mirror.
+            # their own addresses from the carrier of an anonymous node's address rather than the
+            # model mirror.
             data=data_node.data if isinstance(data_node, Node) else None,
             ogm=self.ogm,
         )

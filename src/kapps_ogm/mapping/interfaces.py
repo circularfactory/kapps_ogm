@@ -42,19 +42,20 @@ class Interface:
 
     The declaration adds the range of the interface, and the ranges of its superproperties, to
     the shape of the parameter node. It merges with the interfaces that the stored node gives
-    as evidence, unless it is **authoritative**: then the declarations of the property select
-    the shape alone, the evidence is ignored, and a commit removes the stored values of the
-    properties that only an evidenced interface restricts.
+    as evidence. A declaration that is **exclusive** does not merge: the declarations of the
+    property select the shape alone, the other interfaces of the stored node are ignored, and a
+    commit removes the stored values of the properties that only one of those other interfaces
+    restricts.
 
     Args:
         property_iri: The parameter property, whose range gives the node its domain shape.
         interface_iri: The interface property whose range adds to that shape.
-        authoritative: Whether the declarations of ``property_iri`` select the shape alone.
+        exclusive: Whether the declarations of ``property_iri`` select the shape alone.
     """
 
     property_iri: IRI
     interface_iri: IRI
-    authoritative: bool = False
+    exclusive: bool = False
 
 
 @dataclass(frozen=True)
@@ -62,7 +63,7 @@ class InterfaceResolution:
     """The declared interfaces of one call, by parameter property, and its merge depth."""
 
     declared: Mapping[IRI, frozenset[IRI]] = field(default_factory=dict)
-    authoritative: frozenset[IRI] = frozenset()
+    exclusive: frozenset[IRI] = frozenset()
     merge_depth: Optional[int] = None
 
     @classmethod
@@ -75,7 +76,7 @@ class InterfaceResolution:
 
         Raises:
             OGMUsageError: If an entry is not an ``Interface``, if the declarations of one
-                property disagree on ``authoritative``, or if ``merge_depth`` is negative. Fix
+                property disagree on ``exclusive``, or if ``merge_depth`` is negative. Fix
                 the call.
         """
         if merge_depth is not None and merge_depth < 0:
@@ -88,15 +89,15 @@ class InterfaceResolution:
                     f"interfaces takes Interface entries, got {type(interface).__name__}"
                 )
             prop = IRI(interface.property_iri)
-            if flags.setdefault(prop, interface.authoritative) != interface.authoritative:
+            if flags.setdefault(prop, interface.exclusive) != interface.exclusive:
                 raise OGMUsageError(
-                    f"The interfaces declared for {prop} disagree on authoritative. "
-                    "Mark all of them authoritative, or none."
+                    f"The interfaces declared for {prop} disagree on exclusive. "
+                    "Mark all of them exclusive, or none."
                 )
             declared.setdefault(prop, set()).add(IRI(interface.interface_iri))
         return cls(
             declared={prop: frozenset(ifaces) for prop, ifaces in declared.items()},
-            authoritative=frozenset(prop for prop, flag in flags.items() if flag),
+            exclusive=frozenset(prop for prop, flag in flags.items() if flag),
             merge_depth=merge_depth,
         )
 
@@ -108,7 +109,7 @@ class InterfaceResolution:
         """The declarations as ``Interface`` entries, sorted: ``of`` gives this resolution back
         from them."""
         return tuple(
-            Interface(prop, iface, authoritative=prop in self.authoritative)
+            Interface(prop, iface, exclusive=prop in self.exclusive)
             for prop in sorted(self.declared)
             for iface in sorted(self.declared[prop])
         )

@@ -2,10 +2,9 @@
 # hatchling, not poetry-core, and the reason is the two `authors` below.
 #
 # poetry-core writes only the **first** entry of `authors` and of `maintainers` into a wheel's
-# METADATA, as the singular pre-PEP-621 `Author:` and `Maintainer:` fields. The sibling fork
-# measured that when it was first published and shipped a wheel crediting one of its four
-# authors; moving to the PEP 621 `[project]` table did not fix it, because poetry-core
-# collapses the list either way.
+# METADATA, as the singular pre-PEP-621 `Author:` and `Maintainer:` fields. A wheel built that
+# way credits one of several authors, and moving to the PEP 621 `[project]` table does not fix
+# it, because poetry-core collapses the list either way.
 #
 # That matters more here than it would in a normal project. The publish repository takes **one
 # commit per release and carries no ancestry**, so this metadata, `LICENSE`, `README.md` and
@@ -13,15 +12,14 @@
 # the half a machine reads, and `credited` in `release/config.toml` asserts both names against
 # the built wheel before a release goes out.
 #
-# hatchling is also what the two sibling projects already build with, and unlike the poetry
-# manifest this replaces it is readable by uv -- under poetry-core, `uv run pytest` in this
+# hatchling, unlike a poetry manifest, is readable by uv -- under poetry-core, `uv run pytest` in this
 # checkout could not resolve the dependency table at all.
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
 name = "kapps-ogm"
-version = "0.3.3"
+version = "0.4.0"
 description = "Read and write RDF instance data as pydantic models, with the shape derived from the ontology's own OWL restrictions."
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
@@ -68,7 +66,7 @@ classifiers = [
 dependencies = [
     "rdflib>=7.1.3,<8.0.0",
     "pydantic>=2.12.4,<3.0.0",
-    "kapps-triplestore-interface~=2.2.3",
+    "kapps-triplestore-interface~=2.3.0",
 ]
 
 [project.urls]
@@ -79,9 +77,9 @@ Changelog = "https://github.com/circularfactory/kapps_ogm/blob/main/CHANGELOG.md
 
 [tool.hatch.build.targets.wheel]
 # PEP 621 has no way to say which directory is the package, and the directory name differs from
-# the distribution name by an underscore. `src/` layout as in the two sibling projects:
+# the distribution name by an underscore. `src/` layout:
 # hatchling collapses the path to its last component, so the wheel still carries `kapps_ogm/`
-# at the top -- and the checkout on `sys.path` can no longer shadow the installed wheel, which
+# at the top -- and the checkout on `sys.path` cannot shadow the installed wheel, which
 # is what the release cross-check probes.
 packages = ["src/kapps_ogm"]
 

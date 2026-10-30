@@ -42,7 +42,7 @@ is kept only as an entry point for a later extension. The public `delete` is a d
 of it for one release.
 _Avoid_: delete (as a public method)
 
-**Interface** _(interim name)_:
+**Interface**:
 A property whose own `rdfs:range` adds to the shape of a parameter node, for example the
 connection details of one protocol. It contributes to one node, resolved per instance, from three
 sources merged as a union: **evidence** (the stored node carries a property that the interface's
@@ -50,18 +50,19 @@ range restricts and the shape does not declare), a **declaration** (an `Interfac
 resolves the parameter property as if it were `rdfs:subPropertyOf` the interface), and an
 `rdfs:subPropertyOf` assertion in the ontology. In code, the `Interface` entry of `get_class_spec`,
 `fetch`, `create`, `Create` and `Update`. An `Update` whose data leaves out a property that only
-evidence put into the shape keeps that property's stored values; only an authoritative declaration
+evidence put into the shape keeps that property's stored values. Only an exclusive declaration
 removes them.
 _Avoid_: protocol (one kind of interface), connector (what the middleware wires to it)
 
-**Authoritative declaration** _(interim name)_:
-An `Interface` declared with `authoritative=True`. The declarations of its parameter property then
-select the shape alone, and the evidence is ignored. An `Update` removes the stored values of the
-properties that only an evidenced interface restricts, in the same write; a property that no
-interface restricts stays. It is how a machine moves from one protocol to another.
-_Avoid_: override, precedence (two evidenced interfaces are both merged, never ranked)
+**Exclusive declaration**:
+An `Interface` declared with `exclusive=True`. The declared interfaces are then the only ones of
+its parameter property, and the other interfaces of the stored node are ignored. An `Update`
+removes the stored values of the properties that only one of those other interfaces restricts, in
+the same write; a property that no interface restricts stays. It is how a machine moves from one
+protocol to another.
+_Avoid_: override, precedence (two interfaces of a node are both merged, never ranked)
 
-**Merge depth** _(interim name)_:
+**Merge depth**:
 How many levels of each interface hierarchy are merged into a parameter node's shape, counted from
 the most general property down. A property without a superproperty is at level 1, and each other
 property is one level below its deepest superproperty. The parameter property's own range is always
@@ -92,10 +93,3 @@ has no such case.
 The mapper does not read a SHACL shape. So it does not refuse a second value of a property that
 only an `sh:maxCount 1` shape makes single-valued. Only the store's SHACL validation refuses that
 value.
-
-> _Changed 2026-10-11, decided by Etienne._ Before, this section said: "The mapper reads two of the
-> declarations: `owl:FunctionalProperty`, and an `rdfs:range` restriction with `owl:cardinality 1`
-> or `owl:maxCardinality 1`. It does not read a restriction under `rdfs:subClassOf`, an
-> `owl:qualifiedCardinality`, or a SHACL shape." The case: Core 0.9.0 declares all of its bounds
-> under `rdfs:subClassOf`, 19 of them as `owl:qualifiedCardinality 1`, so none of them reached the
-> data model. A workpiece with two `isActive` values passed the mapper.

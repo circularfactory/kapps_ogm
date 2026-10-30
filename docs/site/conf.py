@@ -1,11 +1,7 @@
 """Sphinx configuration for the kapps-ogm documentation site.
 
-Vendored from ``kapps_semantic_middleware``'s ``docs/site/conf.py``: the same toolchain, theme
-and version switcher, with the ``project`` block and the icon links changed, and the
-scenario-notebook block dropped, since this repository has no notebooks.
-
-Two things differ from that file, and both follow from this repository having no hand-written
-pages:
+The toolchain is Sphinx with the PyData theme and a version switcher. This repository has no
+notebooks and no hand-written pages, and two things follow from that:
 
 - **The landing page is the README.** ``index.md`` is a stub, and ``setup()`` below hands
   Sphinx ``README.md`` in its place while it reads that page. The page is the artefact: the two
@@ -16,8 +12,8 @@ pages:
   and function here carries a docstring, and a reference that silently left them out would
   read as the whole API while showing part of it. They appear with their signatures.
 
-The footer's copyright text is read from the ``LICENSE`` two directories above this file, so a
-vendored copy needs a ``Copyright (c) <year> <holder>`` line there, or the build raises.
+The footer's copyright text is read from the ``LICENSE`` two directories above this file, so it
+needs a ``Copyright (c) <year> <holder>`` line there, or the build raises.
 """
 
 import logging
@@ -34,7 +30,7 @@ author = "Etienne Hoffmann, Sören Weindel"
 def _copyright_from_license(license_path: Path) -> str:
     """The footer's copyright text, read from the copyright lines of the LICENSE.
 
-    ``Copyright (c) 2026 Etienne Hoffmann`` becomes ``2026, Etienne Hoffmann``, the form Sphinx
+    A line ``Copyright (c) <year> <holder>`` becomes ``<year>, <holder>``, the form Sphinx
     prints. The LICENSE is the only place the holder and year are written; several lines join
     with ``; ``.
     """

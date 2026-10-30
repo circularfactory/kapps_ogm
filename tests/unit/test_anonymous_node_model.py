@@ -2,7 +2,7 @@
 
 The anonymous node behind a COMPLEX property carries its RDF address (a Skolem IRI) out of band,
 in a ``PrivateAttr``, so that the address is reachable by the serializer but invisible in every
-projection. See PRD requirement R4 and RDF 1.1 Concepts section 3.5.
+projection. See RDF 1.1 Concepts section 3.5.
 """
 
 import pytest
@@ -111,7 +111,7 @@ class TestAddressCapture:
 
 
 class TestProjectionInvariance:
-    """R4: the address must not leak northbound, into JSON, or into OpenAPI."""
+    """The address must not leak northbound, into JSON, or into OpenAPI."""
 
     def test_model_dump_has_no_id_key(self, unit_model):
         instance = unit_model.model_validate({"id": SKOLEM_IRI, UNIT_FIELD: ["m/s"]})
@@ -133,7 +133,7 @@ class TestProjectionInvariance:
 
 
 class TestMirrorNotSourceOfTruth:
-    """R3/R4: the address deliberately does not survive dump then revalidate."""
+    """The address deliberately does not survive dump then revalidate."""
 
     def test_the_address_is_lost_on_dump_then_revalidate(self, unit_model):
         instance = unit_model.model_validate({"id": SKOLEM_IRI, UNIT_FIELD: ["m/s"]})

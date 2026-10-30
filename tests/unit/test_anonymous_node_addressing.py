@@ -228,7 +228,7 @@ class TestResolvingExistingAddress:
 
 
 class TestJsonLdProjection:
-    """R4: the address must not leak northbound, and JSON-LD is a northbound projection."""
+    """The address must not leak northbound, and JSON-LD is a northbound projection."""
 
     def _belt_json_ld(self, belt_spec: ClassSpec, ogm: OGM) -> dict:
         node = Node(

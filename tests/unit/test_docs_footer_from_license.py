@@ -1,6 +1,6 @@
 """The docs footer's copyright text follows the LICENSE (the config derives it, nothing copies it).
 
-``docs/site/conf.py`` stays one file, because it is vendored from the sibling repositories, and
+``docs/site/conf.py`` stays one file, and
 running a Sphinx configuration can write into the docs tree. A test must not write there, so this
 one takes the helper's definition out of the source with ``ast`` and executes only that.
 """

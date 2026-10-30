@@ -288,16 +288,21 @@ def test_a_depth_with_a_given_class_spec_is_refused(ogm):
         ogm.fetch(instance_iri=BELT_MQTT, class_spec=given, merge_depth=1)
 
 
-def test_declarations_of_one_property_must_agree_on_authoritative(ogm):
-    with pytest.raises(OGMUsageError, match="authoritative"):
+def test_declarations_of_one_property_must_agree_on_exclusive(ogm):
+    with pytest.raises(OGMUsageError, match="exclusive"):
         ogm.get_class_spec(
             class_iri=BELT,
             class_scope=scope(HAS_SPEED),
             interfaces=[
-                Interface(HAS_SPEED, MQTT, authoritative=True),
+                Interface(HAS_SPEED, MQTT, exclusive=True),
                 Interface(HAS_SPEED, OPCUA),
             ],
         )
+
+
+def test_the_former_keyword_of_the_flag_is_refused():
+    with pytest.raises(TypeError, match="authoritative"):
+        Interface(HAS_SPEED, MQTT, authoritative=True)  # type: ignore[call-arg]
 
 
 # --- Writes -----------------------------------------------------------------------------------
@@ -392,10 +397,10 @@ def test_an_update_reads_the_stored_node_and_its_evidence_through_the_public_fet
     assert evidence_reads and all(evidence_reads)
 
 
-def test_an_authoritative_update_reads_the_stale_values_through_the_public_fetch(
+def test_an_exclusive_update_reads_the_stale_values_through_the_public_fetch(
     ogm, store, monkeypatch
 ):
-    # The read of the values that an authoritative declaration makes stale sits below the
+    # The read of the values that an exclusive declaration makes stale sits below the
     # public fetch, as the other reads of the stored node do.
     inside_fetch = []
     reads_outside_fetch = []
@@ -435,10 +440,10 @@ def test_an_authoritative_update_reads_the_stale_values_through_the_public_fetch
     store.triples_get.side_effect = recording(store.triples_get.side_effect)
 
     plain = outside_reads((Interface(HAS_SPEED, OPCUA),))
-    authoritative = outside_reads((Interface(HAS_SPEED, OPCUA, authoritative=True),))
+    exclusive = outside_reads((Interface(HAS_SPEED, OPCUA, exclusive=True),))
 
     # The resolution of the class reads the ontology before the fetch, the same for both.
-    assert authoritative == plain
+    assert exclusive == plain
 
 
 def test_an_update_leaves_out_a_property_of_a_declared_interface_and_removes_it(ogm, store):
@@ -460,7 +465,7 @@ def test_an_update_leaves_out_a_property_of_a_declared_interface_and_removes_it(
     assert not call["new_triples"]
 
 
-def test_an_authoritative_update_refuses_a_value_of_the_stale_interface(ogm, store):
+def test_an_exclusive_update_refuses_a_value_of_the_stale_interface(ogm, store):
     carried = {
         HAS_VALUE: [1.5],
         HAS_UNIT: ["m/s"],
@@ -475,7 +480,7 @@ def test_an_authoritative_update_refuses_a_value_of_the_stale_interface(ogm, sto
                 Update(
                     instance_iri=BELT_MQTT,
                     data={HAS_SPEED: [carried]},
-                    interfaces=(Interface(HAS_SPEED, OPCUA, authoritative=True),),
+                    interfaces=(Interface(HAS_SPEED, OPCUA, exclusive=True),),
                 )
             ]
         )
@@ -524,7 +529,7 @@ def test_a_user_facing_update_leaves_the_connection_details_alone(ogm, store):
     assert {p for s, p, o in call["new_triples"]} == {HAS_VALUE}
 
 
-def test_an_authoritative_declaration_removes_the_stale_metadata_in_the_same_write(
+def test_an_exclusive_declaration_removes_the_stale_metadata_in_the_same_write(
     ogm, store
 ):
     migrated = {
@@ -539,7 +544,7 @@ def test_an_authoritative_declaration_removes_the_stale_metadata_in_the_same_wri
             Update(
                 instance_iri=BELT_MQTT,
                 data={HAS_SPEED: [migrated]},
-                interfaces=(Interface(HAS_SPEED, OPCUA, authoritative=True),),
+                interfaces=(Interface(HAS_SPEED, OPCUA, exclusive=True),),
             )
         ]
     )
@@ -558,9 +563,9 @@ def test_an_authoritative_declaration_removes_the_stale_metadata_in_the_same_wri
     }
 
 
-def test_an_authoritative_declaration_selects_the_shape_of_a_fetch(ogm):
+def test_an_exclusive_declaration_selects_the_shape_of_a_fetch(ogm):
     resolved = fetched_shape(
-        ogm, BELT_MQTT, interfaces=[Interface(HAS_SPEED, OPCUA, authoritative=True)]
+        ogm, BELT_MQTT, interfaces=[Interface(HAS_SPEED, OPCUA, exclusive=True)]
     )
     assert resolved == OPCUA_SHAPE
 
@@ -572,7 +577,7 @@ def test_two_values_of_a_single_valued_connection_property_are_refused(ogm):
         )
 
 
-def test_a_user_facing_authoritative_update_removes_only_the_stale_metadata(ogm, store):
+def test_a_user_facing_exclusive_update_removes_only_the_stale_metadata(ogm, store):
     # At depth 1 the declared interface's own connection details are out of view, not stale.
     ogm.commit(
         changes=[
@@ -583,7 +588,7 @@ def test_a_user_facing_authoritative_update_removes_only_the_stale_metadata(ogm,
                         {HAS_VALUE: [1.5], HAS_UNIT: ["m/s"], ACCESS_MODE: ["readwrite"]}
                     ]
                 },
-                interfaces=(Interface(HAS_SPEED, OPCUA, authoritative=True),),
+                interfaces=(Interface(HAS_SPEED, OPCUA, exclusive=True),),
                 merge_depth=1,
             )
         ]

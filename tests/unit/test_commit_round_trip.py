@@ -1,7 +1,6 @@
 """Integration tests for the fetch/commit round trip through ``OGM.commit``.
 
-These drive the canonical usage pattern — the one ``scripts/demo_update_value.py`` demonstrates
-and the middleware uses::
+These drive the canonical usage pattern::
 
     fetch(materialize=True) -> model_dump() -> edit a value -> commit(data=<plain dict>)
 
@@ -9,7 +8,7 @@ That pattern is the reason this machinery exists. The dumped payload deliberatel
 the anonymous node's address, so unless ``commit`` recovers it from the store the write mints a
 replacement, unlinks the real node and strands everything the ClassSpec does not declare.
 
-The fixture mirrors the failure recorded on the ticket: a conveyor belt whose speed parameter
+The fixture mirrors the failure it guards against: a conveyor belt whose speed parameter
 carries a value and a unit (both declared by the range restriction) plus an MQTT topic (not
 declared, and normal under the Open World Assumption).
 
@@ -227,7 +226,7 @@ class TestALegacyBlankNode:
         assert any(isinstance(triple[0], BNode) for triple in removed)
 
 
-# --- A validation sends no request to the store (OGM 55) --------------------------------------
+# --- A validation sends no request to the store --------------------------------------
 # The removed check asked ``iri_exists`` (all three positions, which never answers true for an
 # instance) and then tested ``is_subclass`` where ``rdf:type`` was meant. A create onto an
 # existing IRI is refused by the write's absent-subjects precondition; a commit takes the class
